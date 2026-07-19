@@ -48,6 +48,60 @@ class Database:
         )
         """)
 
+        
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS resume_analysis (
+
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            resume_id INTEGER NOT NULL,
+
+            cargo TEXT,
+            area TEXT,
+            senioridade TEXT,
+
+            ats_score INTEGER,
+
+            hard_skills TEXT,
+            soft_skills TEXT,
+            tecnologias TEXT,
+            idiomas TEXT,
+            certificacoes TEXT,
+
+            resumo TEXT,
+
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (resume_id) REFERENCES resumes(id)
+        )
+        """)
+        
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS resume_analysis (
+
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            resume_id INTEGER NOT NULL,
+
+            cargo TEXT,
+            area TEXT,
+            senioridade TEXT,
+
+            ats_score INTEGER,
+
+            hard_skills TEXT,
+            soft_skills TEXT,
+            tecnologias TEXT,
+            idiomas TEXT,
+            certificacoes TEXT,
+
+            resumo TEXT,
+
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (resume_id) REFERENCES resumes(id)
+        )
+        """)
         self.conn.commit()
 
     def salvar_curriculo(self, nome, caminho, texto):
@@ -67,6 +121,60 @@ class Database:
         )
         """, (nome, caminho, texto))
 
+        
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS resume_analysis (
+
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            resume_id INTEGER NOT NULL,
+
+            cargo TEXT,
+            area TEXT,
+            senioridade TEXT,
+
+            ats_score INTEGER,
+
+            hard_skills TEXT,
+            soft_skills TEXT,
+            tecnologias TEXT,
+            idiomas TEXT,
+            certificacoes TEXT,
+
+            resumo TEXT,
+
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (resume_id) REFERENCES resumes(id)
+        )
+        """)
+        
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS resume_analysis (
+
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            resume_id INTEGER NOT NULL,
+
+            cargo TEXT,
+            area TEXT,
+            senioridade TEXT,
+
+            ats_score INTEGER,
+
+            hard_skills TEXT,
+            soft_skills TEXT,
+            tecnologias TEXT,
+            idiomas TEXT,
+            certificacoes TEXT,
+
+            resumo TEXT,
+
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (resume_id) REFERENCES resumes(id)
+        )
+        """)
         self.conn.commit()
 
     def listar_curriculos(self):
@@ -136,6 +244,60 @@ class Database:
                 "DELETE FROM sqlite_sequence WHERE name='resumes'"
             )
 
+        
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS resume_analysis (
+
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            resume_id INTEGER NOT NULL,
+
+            cargo TEXT,
+            area TEXT,
+            senioridade TEXT,
+
+            ats_score INTEGER,
+
+            hard_skills TEXT,
+            soft_skills TEXT,
+            tecnologias TEXT,
+            idiomas TEXT,
+            certificacoes TEXT,
+
+            resumo TEXT,
+
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (resume_id) REFERENCES resumes(id)
+        )
+        """)
+        
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS resume_analysis (
+
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            resume_id INTEGER NOT NULL,
+
+            cargo TEXT,
+            area TEXT,
+            senioridade TEXT,
+
+            ats_score INTEGER,
+
+            hard_skills TEXT,
+            soft_skills TEXT,
+            tecnologias TEXT,
+            idiomas TEXT,
+            certificacoes TEXT,
+
+            resumo TEXT,
+
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (resume_id) REFERENCES resumes(id)
+        )
+        """)
         self.conn.commit()
 
     def limpar_historico(self):
@@ -148,4 +310,60 @@ class Database:
             "DELETE FROM sqlite_sequence WHERE name='resumes'"
         )
 
+        
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS resume_analysis (
+
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            resume_id INTEGER NOT NULL,
+
+            cargo TEXT,
+            area TEXT,
+            senioridade TEXT,
+
+            ats_score INTEGER,
+
+            hard_skills TEXT,
+            soft_skills TEXT,
+            tecnologias TEXT,
+            idiomas TEXT,
+            certificacoes TEXT,
+
+            resumo TEXT,
+
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (resume_id) REFERENCES resumes(id)
+        )
+        """)
+        
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS resume_analysis (
+
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            resume_id INTEGER NOT NULL,
+
+            cargo TEXT,
+            area TEXT,
+            senioridade TEXT,
+
+            ats_score INTEGER,
+
+            hard_skills TEXT,
+            soft_skills TEXT,
+            tecnologias TEXT,
+            idiomas TEXT,
+            certificacoes TEXT,
+
+            resumo TEXT,
+
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (resume_id) REFERENCES resumes(id)
+        )
+        """)
         self.conn.commit()
+
+
