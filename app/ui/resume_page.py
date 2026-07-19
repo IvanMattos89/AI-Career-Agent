@@ -9,6 +9,7 @@
 )
 
 from app.services.resume_service import ResumeService
+from app.services.analysis_service import AnalysisService
 
 
 class ResumePage(QWidget):
@@ -17,6 +18,7 @@ class ResumePage(QWidget):
         super().__init__()
 
         self.service = ResumeService()
+        self.analysis_service = AnalysisService()
 
         layout = QVBoxLayout(self)
 
@@ -56,6 +58,13 @@ class ResumePage(QWidget):
 
             self.editor.setPlainText(texto)
 
+            analise = self.analysis_service.analisar_texto(texto)
+
+            janela = self.window()
+
+            if hasattr(janela, "abrir_analise"):
+                janela.abrir_analise(analise)
+
         except Exception as erro:
 
             QMessageBox.critical(
@@ -63,3 +72,6 @@ class ResumePage(QWidget):
                 "Erro",
                 str(erro)
             )
+
+
+
