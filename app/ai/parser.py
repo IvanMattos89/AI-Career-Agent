@@ -41,6 +41,20 @@ def parse_resume_analysis(resposta):
 
         certificacoes=dados["certificacoes"],
 
+        anos_experiencia=dados.get("anos_experiencia", 0),
+
+        nivel_curriculo=dados.get("nivel_curriculo", ""),
+
+        palavras_chave=dados.get("palavras_chave", []),
+
+        pontos_fortes=dados.get("pontos_fortes", []),
+
+        pontos_melhoria=dados.get("pontos_melhoria", []),
+
+        competencias_faltantes=dados.get("competencias_faltantes", []),
+
+        recomendacoes=dados.get("recomendacoes", []),
+
         resumo=dados["resumo"],
 
         ats_score=ats

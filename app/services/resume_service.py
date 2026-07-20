@@ -25,13 +25,13 @@ class ResumeService:
 
         texto = self.ler(destino)
 
-        self.db.salvar_curriculo(
+        resume_id = self.db.salvar_curriculo(
             destino.name,
             str(destino),
             texto
         )
 
-        return destino, texto
+        return resume_id, destino, texto
 
     def ler(self, arquivo):
 
@@ -43,7 +43,7 @@ class ResumeService:
         if arquivo.suffix.lower() == ".pdf":
             return self._ler_pdf(arquivo)
 
-        raise ValueError("Formato nao suportado.")
+        raise ValueError("Formato não suportado.")
 
     def _ler_docx(self, arquivo):
 

@@ -1,0 +1,44 @@
+    def setScore(self, valor):
+
+        valor = max(0, min(100, int(valor)))
+
+        self.lblScore.setText(str(valor))
+        self.progress.setValue(valor)
+
+        if valor >= 80:
+            texto = "Excelente"
+            cor = SUCCESS
+
+        elif valor >= 60:
+            texto = "Bom"
+            cor = "#F9A825"
+
+        elif valor >= 40:
+            texto = "Regular"
+            cor = "#EF6C00"
+
+        else:
+            texto = "Precisa melhorar"
+            cor = DANGER
+
+        self.lblScore.setStyleSheet(f"""
+            font-size:42px;
+            font-weight:bold;
+            color:{cor};
+        """)
+
+        self.lblStatus.setText(texto)
+
+        self.progress.setStyleSheet(f"""
+        QProgressBar {{
+            border:1px solid #CCCCCC;
+            border-radius:6px;
+            text-align:center;
+            height:18px;
+        }}
+
+        QProgressBar::chunk {{
+            background:{cor};
+            border-radius:5px;
+        }}
+        """)

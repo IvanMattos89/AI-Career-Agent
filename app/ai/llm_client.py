@@ -17,25 +17,36 @@ class LLMClient:
             self.client = OpenAI(
                 api_key=AIConfig.OPENAI_API_KEY
             )
-
     def disponivel(self):
 
-        if self.provider == "ollama":
+        # Modo AUTO ou OLLAMA
+        if self.provider in ("auto", "ollama"):
+
             try:
-                requests.get(
+                resposta = requests.get(
                     AIConfig.OLLAMA_URL + "/api/tags",
                     timeout=5
-                ).raise_for_status()
-                return True
-            except Exception as e:
-                print("ERRO AO CONECTAR AO OLLAMA:", e)
-                return False
+                )
 
+                resposta.raise_for_status()
+
+                return True
+
+            except Exception as e:
+
+                print("ERRO AO CONECTAR AO OLLAMA:", e)
+
+                if self.provider == "ollama":
+                    return False
+
+        # OpenAI
+      
+    
         return self.client is not None
 
     def perguntar(self, prompt):
 
-        if self.provider == "ollama":
+        if self.provider in ("auto", "ollama"):
 
             prompt_final = (
                 "Você é um especialista em RH, recrutamento, ATS e análise de currículos.\n\n"

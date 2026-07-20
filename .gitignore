@@ -1,0 +1,13 @@
+﻿__pycache__/
+*.py[cod]
+
+*.bak
+*.bkp
+*.camada2
+
+data/*.db
+
+.vscode/
+.idea/
+
+backup/

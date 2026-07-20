@@ -79,3 +79,13 @@ class ResumeAnalyzer:
             certificacoes=[],
             resumo="Análise local baseada no conteúdo do currículo."
         )
+
+    def comparar(self, prompt):
+
+        if not self.llm.disponivel():
+            raise RuntimeError("Ollama não está disponível.")
+
+        resposta = self.llm.perguntar(prompt)
+
+        return resposta
+

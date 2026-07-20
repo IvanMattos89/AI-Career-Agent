@@ -15,7 +15,8 @@ from app.ui.jobs_page import JobsPage
 from app.ui.resume_page import ResumePage
 from app.ui.history_page import HistoryPage
 from app.ui.settings_page import SettingsPage
-from app.ui.analysis_page import AnalysisPage
+from app.ui.pages.analysis_page import AnalysisPage
+from app.ui.pages.dashboard_page import DashboardPage
 
 
 class MainWindow(QMainWindow):
@@ -155,5 +156,6 @@ class MainWindow(QMainWindow):
             }
 
         """)
+
 
 

@@ -52,13 +52,16 @@ class ResumePage(QWidget):
 
         try:
 
-            destino, texto = self.service.importar(arquivo)
+            resume_id, destino, texto = self.service.importar(arquivo)
 
             self.lbl_arquivo.setText(f"Arquivo: {destino.name}")
 
             self.editor.setPlainText(texto)
 
-            analise = self.analysis_service.analisar_texto(texto)
+            analise = self.analysis_service.analisar_texto(
+                resume_id,
+                texto
+            )
 
             janela = self.window()
 
@@ -72,6 +75,3 @@ class ResumePage(QWidget):
                 "Erro",
                 str(erro)
             )
-
-
-

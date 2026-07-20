@@ -1,7 +1,4 @@
-﻿from app.ai.models import ResumeAnalysis
-
-
-REQUIRED_FIELDS = [
+﻿REQUIRED_FIELDS = [
     "cargo",
     "area",
     "confianca",
@@ -11,36 +8,66 @@ REQUIRED_FIELDS = [
     "tecnologias",
     "idiomas",
     "certificacoes",
+    "anos_experiencia",
+    "nivel_curriculo",
+    "palavras_chave",
+    "pontos_fortes",
+    "pontos_melhoria",
+    "competencias_faltantes",
+    "recomendacoes",
     "resumo"
+]
+
+
+LIST_FIELDS = [
+    "hard_skills",
+    "soft_skills",
+    "tecnologias",
+    "idiomas",
+    "certificacoes",
+    "palavras_chave",
+    "pontos_fortes",
+    "pontos_melhoria",
+    "competencias_faltantes",
+    "recomendacoes"
 ]
 
 
 def validate(data: dict):
 
+    # Garante que todos os campos existam
     for campo in REQUIRED_FIELDS:
 
         if campo not in data:
 
-            data[campo] = [] if campo.endswith("skills") else ""
+            if campo in LIST_FIELDS:
+                data[campo] = []
 
-    if not isinstance(data["hard_skills"], list):
-        data["hard_skills"] = []
+            elif campo == "confianca":
+                data[campo] = 0.0
 
-    if not isinstance(data["soft_skills"], list):
-        data["soft_skills"] = []
+            elif campo == "anos_experiencia":
+                data[campo] = 0
 
-    if not isinstance(data["tecnologias"], list):
-        data["tecnologias"] = []
+            else:
+                data[campo] = ""
 
-    if not isinstance(data["idiomas"], list):
-        data["idiomas"] = []
+    # Garante que os campos de lista sejam realmente listas
+    for campo in LIST_FIELDS:
 
-    if not isinstance(data["certificacoes"], list):
-        data["certificacoes"] = []
+        if not isinstance(data[campo], list):
+            data[campo] = []
 
+    # Converte confiança
     try:
         data["confianca"] = float(data["confianca"])
-    except:
+    except Exception:
         data["confianca"] = 0.0
+
+    # Converte anos de experiência
+    try:
+        data["anos_experiencia"] = int(data["anos_experiencia"])
+    except Exception:
+        data["anos_experiencia"] = 0
 
     return data
