@@ -7,6 +7,9 @@
     QFrame,
 )
 
+from types import SimpleNamespace
+
+from app.database.sqlite_db import Database
 from app.ui.widgets.score_card import ScoreCard
 from app.ui.widgets.info_card import InfoCard
 from app.ui.widgets.section_card import SectionCard
@@ -16,7 +19,9 @@ class AnalysisPage(QWidget):
 
     def __init__(self):
         super().__init__()
+        self.db = Database()
         self._criar_interface()
+        self.carregar_ultima_analise()
 
     # =====================================================
     # INTERFACE
@@ -27,7 +32,7 @@ class AnalysisPage(QWidget):
         layout_principal = QVBoxLayout(self)
         layout_principal.setContentsMargins(20,20,20,20)
 
-        titulo = QLabel("Analise Inteligente do Curriculo")
+        titulo = QLabel("Análise inteligente do currículo")
         titulo.setStyleSheet("""
             QLabel{
                 font-size:28px;
@@ -38,6 +43,10 @@ class AnalysisPage(QWidget):
         """)
 
         layout_principal.addWidget(titulo)
+
+        subtitulo = QLabel("Veja os pontos fortes do perfil e os próximos ajustes recomendados para aumentar a aderência às vagas.")
+        subtitulo.setStyleSheet("color:#667085;font-size:13px;padding:0 8px 8px;")
+        layout_principal.addWidget(subtitulo)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -163,6 +172,41 @@ class AnalysisPage(QWidget):
     # ATUALIZA A ANÁLISE
     # =====================================================
 
+    @staticmethod
+    def _lista(valor):
+        return [item.strip() for item in (valor or "").split(";") if item.strip()]
+
+    def carregar_ultima_analise(self):
+        """Reabre a última análise persistida ao entrar nesta tela."""
+        registro = self.db.obter_ultima_analise()
+        if not registro:
+            return False
+        habilidades = self._lista(registro["hard_skills"])
+        analise = SimpleNamespace(
+            ats_score=registro["ats_score"] or 0,
+            cargo=registro["cargo"] or "Não identificado",
+            area=registro["area"] or "Não identificada",
+            senioridade=registro["senioridade"] or "Em análise",
+            anos_experiencia=registro["anos_experiencia"] or 0,
+            confianca=None,
+            hard_skills=habilidades,
+            soft_skills=self._lista(registro["soft_skills"]),
+            tecnologias=self._lista(registro["tecnologias"]),
+            idiomas=self._lista(registro["idiomas"]),
+            certificacoes=self._lista(registro["certificacoes"]),
+            palavras_chave=self._lista(registro["palavras_chave"]) or habilidades,
+            pontos_fortes=self._lista(registro["pontos_fortes"]) or habilidades[:5],
+            pontos_melhoria=self._lista(registro["pontos_melhoria"]),
+            competencias_faltantes=self._lista(registro["competencias_faltantes"]),
+            recomendacoes=self._lista(registro["recomendacoes"]) or [
+                "Inclua resultados mensuráveis nas experiências mais relevantes.",
+                "Adapte o resumo profissional às palavras-chave da vaga antes de candidatar.",
+            ],
+            resumo=registro["resumo"] or "Resumo não disponível.",
+        )
+        self.mostrar_analise(analise)
+        return True
+
     def mostrar_analise(self, analise):
 
         # ---------- Score ----------
@@ -194,16 +238,9 @@ class AnalysisPage(QWidget):
             f"{anos} anos"
         )
 
-        confianca = int(
-            getattr(
-                analise,
-                "confianca",
-                0
-            ) * 100
-        )
-
+        confianca = getattr(analise, "confianca", None)
         self.cardConfianca.setValue(
-            f"{confianca}%"
+            f"{int(confianca * 100)}%" if isinstance(confianca, (int, float)) else "Não registrada"
         )
 
         # ---------- Cards laterais ----------
@@ -294,5 +331,5 @@ class AnalysisPage(QWidget):
             "-"
         )
 
-        self.cardResumo.lblConteudo.setText(resumo)
+        self.cardResumo.setText(resumo)
 

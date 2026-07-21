@@ -1,5 +1,7 @@
 ﻿import json
 
+import re
+
 from app.ai.validator import validate
 from app.ai.normalizer import normalize
 from app.ai.ats_score import calculate
@@ -11,9 +13,11 @@ def parse_resume_analysis(resposta):
     if isinstance(resposta, bytes):
         resposta = resposta.decode("utf8")
 
-    resposta = resposta.strip()
+    resposta = re.sub(r"^```(?:json)?\s*|\s*```$", "", resposta.strip(), flags=re.I)
 
     dados = json.loads(resposta)
+    if not isinstance(dados, dict):
+        raise ValueError("A resposta da IA deve ser um objeto JSON.")
 
     dados = validate(dados)
 

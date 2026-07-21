@@ -29,3 +29,8 @@ class AIConfig:
         "OLLAMA_MODEL",
         "llama3.1:8b"
     )
+
+    # Mantém a aplicação responsiva: após um minuto o worker usa o fallback
+    # local. O valor pode ser ajustado nas configurações para modelos lentos.
+    OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "60"))
+    OLLAMA_CONNECT_TIMEOUT = int(os.getenv("OLLAMA_CONNECT_TIMEOUT", "5"))

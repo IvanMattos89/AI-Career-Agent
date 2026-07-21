@@ -1,9 +1,9 @@
 ﻿import hashlib
 import json
-from pathlib import Path
+from app.config import CACHE_DIR
 
 
-CACHE = Path("cache")
+CACHE = CACHE_DIR
 
 CACHE.mkdir(exist_ok=True)
 

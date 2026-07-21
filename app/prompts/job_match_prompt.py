@@ -53,12 +53,14 @@ Formato obrigatório:
     "competencias_encontradas": [],
     "competencias_faltantes": [],
     "recomendacoes": [],
+    "explicacao": "",
     "resumo": ""
 }}
 
 Regras:
 
 - compatibilidade deve ser um número de 0 a 100.
+- explicacao deve justificar a nota em 2 a 4 frases, citando competências e lacunas relevantes.
 - Não escreva explicações fora do JSON.
 - Não utilize markdown.
 - Não utilize ```json.

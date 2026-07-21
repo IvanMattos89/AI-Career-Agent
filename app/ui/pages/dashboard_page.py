@@ -35,7 +35,7 @@ class DashboardPage(QWidget):
 
         self.cardATS = InfoCard("ATS Médio", "0")
         self.cardCurriculos = InfoCard("Currículos", "0")
-        self.cardVagas = InfoCard("Vagas", "-")
+        self.cardVagas = InfoCard("Job Matches", "0")
         self.cardUltima = InfoCard("Último Cargo", "-")
 
         grid.addWidget(self.cardATS,0,0)
@@ -72,7 +72,7 @@ class DashboardPage(QWidget):
 
         self.cardATS.setValue(str(dados["ats"]))
         self.cardCurriculos.setValue(str(dados["curriculos"]))
-        self.cardVagas.setValue("-")
+        self.cardVagas.setValue(f'{dados["job_matches"]} ({dados["match_medio"]}%)')
         self.cardUltima.setValue(dados["cargo"])
 
         self.carregar_historico()

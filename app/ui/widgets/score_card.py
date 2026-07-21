@@ -6,6 +6,7 @@
 )
 
 from app.ui.themes.style import *
+from app.utils.score import classify_score
 
 
 class ScoreCard(QFrame):
@@ -84,23 +85,20 @@ class ScoreCard(QFrame):
         self.lblScore.setText(str(valor))
         self.progress.setValue(valor)
 
-        if valor >= 80:
-            texto = "Excelente"
-            cor = SUCCESS
-
-        elif valor >= 60:
-            texto = "Bom"
-            cor = WARNING
-
-        elif valor >= 40:
-            texto = "Regular"
-            cor = "#EF6C00"
-
-        else:
-            texto = "Precisa Melhorar"
-            cor = DANGER
+        classificacao = classify_score(valor)
+        cores = {
+            "excellent": SUCCESS,
+            "good": WARNING,
+            "regular": ATTENTION,
+            "needs_improvement": DANGER,
+        }
+        texto = classificacao.label
+        cor = cores[classificacao.code]
 
         self.lblStatus.setText(texto)
+        descricao = f"Pontuação {valor} de 100: {texto}."
+        self.setAccessibleName(descricao)
+        self.setToolTip(descricao)
 
         self.lblScore.setStyleSheet(f"""
             border:none;

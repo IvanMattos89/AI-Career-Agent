@@ -1,0 +1,67 @@
+2026-07-19 22:52:33,662 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=90)
+2026-07-19 22:54:18,709 WARNING ai_career_agent: Análise por IA indisponível; usando fallback local: indisponível
+2026-07-19 22:59:05,115 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=180)
+2026-07-19 22:59:05,120 WARNING ai_career_agent: Análise por IA indisponível; usando fallback local: Nenhum provedor de IA disponível.
+2026-07-19 23:21:05,210 WARNING ai_career_agent: Análise por IA indisponível; usando fallback local: Teste: IA indisponível
+2026-07-19 23:22:08,377 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=180)
+2026-07-19 23:22:08,379 WARNING ai_career_agent: Análise por IA indisponível; usando fallback local: Nenhum provedor de IA disponível.
+2026-07-19 23:25:11,722 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-19 23:25:48,672 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-19 23:26:14,517 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-19 23:32:02,072 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-19 23:32:12,902 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 18:07:23,497 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 18:07:50,778 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 18:11:52,051 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 18:17:04,078 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=60)
+2026-07-20 18:18:07,629 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=60)
+2026-07-20 18:20:29,495 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 18:21:37,731 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=60)
+2026-07-20 18:21:37,732 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 18:21:39,410 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 18:21:50,699 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=12)
+2026-07-20 18:21:52,319 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=60)
+2026-07-20 18:21:52,320 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 18:22:52,378 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=60)
+2026-07-20 18:22:52,379 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 18:25:04,561 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=20)
+2026-07-20 18:25:04,563 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 18:25:14,870 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=20)
+2026-07-20 18:25:14,871 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 18:25:34,927 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=20)
+2026-07-20 18:25:34,928 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 18:26:54,741 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 18:27:25,311 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 21:40:49,728 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=60)
+2026-07-20 21:40:49,735 WARNING ai_career_agent: Análise por IA indisponível; usando fallback local: Nenhum provedor de IA disponível.
+2026-07-20 21:41:29,079 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=20)
+2026-07-20 21:41:29,079 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 21:41:49,166 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=20)
+2026-07-20 21:41:49,167 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 21:42:09,239 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=20)
+2026-07-20 21:42:09,240 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 21:42:29,336 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=20)
+2026-07-20 21:42:29,337 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 21:42:49,412 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=20)
+2026-07-20 21:42:49,413 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 21:43:09,709 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=20)
+2026-07-20 21:43:09,710 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 21:43:29,786 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=20)
+2026-07-20 21:43:29,787 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 21:43:49,873 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=20)
+2026-07-20 21:43:49,873 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 21:44:09,973 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=20)
+2026-07-20 21:44:09,973 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 21:44:30,035 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=20)
+2026-07-20 21:44:30,036 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 21:46:40,504 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=20)
+2026-07-20 21:46:40,505 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 21:48:29,373 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=20)
+2026-07-20 22:05:51,422 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 22:06:28,863 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 22:22:55,632 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=20)
+2026-07-20 22:24:44,136 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 22:25:25,390 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 22:29:19,665 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.
+2026-07-20 22:33:26,214 WARNING ai_career_agent: Falha no Ollama: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=20)
+2026-07-20 22:33:26,220 WARNING ai_career_agent: Job Match por IA indisponível; usando comparação local.

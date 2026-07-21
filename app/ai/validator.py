@@ -63,11 +63,13 @@ def validate(data: dict):
         data["confianca"] = float(data["confianca"])
     except Exception:
         data["confianca"] = 0.0
+    data["confianca"] = max(0.0, min(1.0, data["confianca"]))
 
     # Converte anos de experiência
     try:
         data["anos_experiencia"] = int(data["anos_experiencia"])
     except Exception:
         data["anos_experiencia"] = 0
+    data["anos_experiencia"] = max(0, data["anos_experiencia"])
 
     return data

@@ -1,104 +1,45 @@
-﻿import requests
+import requests
 from openai import OpenAI
 
 from app.ai.config import AIConfig
+from app.ai.logging_config import logger
 
 
 class LLMClient:
-
     def __init__(self):
         self.provider = AIConfig.PROVIDER
-        self.client = None
+        self.client = OpenAI(api_key=AIConfig.OPENAI_API_KEY) if AIConfig.OPENAI_API_KEY else None
 
-        if (
-            self.provider == "openai"
-            and AIConfig.OPENAI_API_KEY
-        ):
-            self.client = OpenAI(
-                api_key=AIConfig.OPENAI_API_KEY
-            )
-    def disponivel(self):
-
-        # Modo AUTO ou OLLAMA
-        if self.provider in ("auto", "ollama"):
-
-            try:
-                resposta = requests.get(
-                    AIConfig.OLLAMA_URL + "/api/tags",
-                    timeout=5
-                )
-
-                resposta.raise_for_status()
-
-                return True
-
-            except Exception as e:
-
-                print("ERRO AO CONECTAR AO OLLAMA:", e)
-
-                if self.provider == "ollama":
-                    return False
-
-        # OpenAI
-      
-    
-        return self.client is not None
-
-    def perguntar(self, prompt):
-
-        if self.provider in ("auto", "ollama"):
-
-            prompt_final = (
-                "Você é um especialista em RH, recrutamento, ATS e análise de currículos.\n\n"
-                + prompt[:12000]
-            )
-
-            print("=" * 80)
-            print("USANDO OLLAMA")
-            print("MODELO:", AIConfig.OLLAMA_MODEL)
-            print("TAMANHO DO PROMPT:", len(prompt_final))
-            print("=" * 80)
-
-            resposta = requests.post(
-                AIConfig.OLLAMA_URL + "/api/generate",
-                json={
-                    "model": AIConfig.OLLAMA_MODEL,
-                    "prompt": prompt_final,
-                    "stream": False,
-                    "format": "json"
-                },
-                timeout=300
-            )
-
+    def _ollama_disponivel(self):
+        try:
+            resposta = requests.get(f"{AIConfig.OLLAMA_URL.rstrip('/')}/api/tags", timeout=AIConfig.OLLAMA_CONNECT_TIMEOUT)
             resposta.raise_for_status()
+            return True
+        except requests.RequestException as erro:
+            logger.info("Ollama indisponível: %s", erro)
+            return False
 
-            dados = resposta.json()
+    def disponivel(self):
+        return (self.provider in ("auto", "ollama") and self._ollama_disponivel()) or (self.provider in ("auto", "openai") and self.client is not None)
 
-            conteudo = dados.get("response", "")
-
-        else:
-
-            resposta = self.client.chat.completions.create(
-                model=AIConfig.OPENAI_MODEL,
-                temperature=0.2,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "Você é especialista em RH, recrutamento e análise de currículos."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
-            )
-
-            conteudo = resposta.choices[0].message.content
-
-        print("=" * 80)
-        print("RESPOSTA DA IA")
-        print("=" * 80)
-        print(conteudo)
-        print("=" * 80)
-
-        return conteudo
+    def perguntar(self, prompt, json_mode=True, timeout=None):
+        if self.provider in ("auto", "ollama") and self._ollama_disponivel():
+            try:
+                payload = {"model": AIConfig.OLLAMA_MODEL, "prompt": prompt[:12000], "stream": False}
+                if json_mode:
+                    payload["format"] = "json"
+                resposta = requests.post(
+                    f"{AIConfig.OLLAMA_URL.rstrip('/')}/api/generate",
+                    json=payload,
+                    timeout=timeout or AIConfig.OLLAMA_TIMEOUT,
+                )
+                resposta.raise_for_status()
+                return resposta.json().get("response", "")
+            except requests.RequestException as erro:
+                logger.warning("Falha no Ollama: %s", erro)
+                if self.provider == "ollama":
+                    raise RuntimeError(f"Falha no Ollama: {erro}") from erro
+        if self.client is not None and self.provider in ("auto", "openai"):
+            resposta = self.client.chat.completions.create(model=AIConfig.OPENAI_MODEL, temperature=0.2, messages=[{"role": "system", "content": "Você é especialista em RH e carreira."}, {"role": "user", "content": prompt}])
+            return resposta.choices[0].message.content or ""
+        raise RuntimeError("Nenhum provedor de IA disponível.")

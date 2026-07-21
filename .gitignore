@@ -6,6 +6,19 @@
 *.camada2
 
 data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+data/reports/
+data/resumes/*
+!data/resumes/.gitkeep
+
+.env
+.venv/
+venv/
+.pytest_cache/
+temp_*
+*.tmp
 
 .vscode/
 .idea/

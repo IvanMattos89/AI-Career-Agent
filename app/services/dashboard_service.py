@@ -22,6 +22,7 @@ class DashboardService:
             cargo = "-"
             data = "-"
 
+        match_metricas = self.db.dashboard_job_match_metricas()
         return {
 
             "ats": self.db.dashboard_media_ats(),
@@ -30,7 +31,9 @@ class DashboardService:
 
             "ultima": data,
 
-            "cargo": cargo
+            "cargo": cargo,
+            "job_matches": match_metricas["total"],
+            "match_medio": match_metricas["media"],
         }
 
 

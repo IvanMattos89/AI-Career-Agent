@@ -97,7 +97,7 @@ class HistoryPage(QWidget):
 
             self.tabela.setItem(
                 linha,2,
-                QTableWidgetItem(str(registro[4]))
+                QTableWidgetItem(str(registro[2]))
             )
 
     def abrir_curriculo(self):
