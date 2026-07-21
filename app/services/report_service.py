@@ -4,7 +4,11 @@ from pathlib import Path
 from docx import Document
 from docx.shared import Inches, Pt, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from PySide6.QtGui import QPainter, QPdfWriter, QPageSize, QFont, QFontMetrics
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import cm
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 from app.config import REPORTS_DIR
 
@@ -142,50 +146,47 @@ class ReportService:
         return blocos
 
     def exportar_curriculo_adaptado_pdf(self, dados, destino):
-        """Exporta o currículo com o mesmo modelo formal do DOCX em A4."""
-        writer = QPdfWriter(str(destino))
-        writer.setPageSize(QPageSize(QPageSize.A4))
-        writer.setResolution(96)
-        painter = QPainter(writer)
-        largura, altura = 794, 1123
-        esquerda, direita, topo, base = 113, 75, 113, 75
-        y = topo
-
-        def nova_pagina():
-            nonlocal y
-            writer.newPage(); y = topo
-
-        def escrever(texto, tamanho=12, negrito=False, centralizado=False, espaco=6):
-            nonlocal y
-            fonte = QFont("Arial", tamanho)
-            fonte.setBold(negrito)
-            painter.setFont(fonte)
-            metricas = QFontMetrics(fonte)
-            palavras, linhas, atual = str(texto).split(), [], ""
-            for palavra in palavras:
-                tentativa = (atual + " " + palavra).strip()
-                if metricas.horizontalAdvance(tentativa) > largura - esquerda - direita and atual:
-                    linhas.append(atual); atual = palavra
-                else:
-                    atual = tentativa
-            linhas.append(atual or "")
-            for linha in linhas:
-                if y + metricas.height() > altura - base:
-                    nova_pagina()
-                x = esquerda if not centralizado else max(esquerda, (largura - metricas.horizontalAdvance(linha)) // 2)
-                painter.drawText(x, y + metricas.ascent(), linha)
-                y += round(metricas.height() * 1.5)
-            y += espaco
-
-        for titulo, linhas in self._curriculo_blocos(dados):
-            if titulo == "__cabecalho__":
-                nome, contatos = linhas
-                escrever(nome.upper(), 15, True, True, 2)
+        """Exporta o currículo em PDF com fontes Unicode e padrão formal A4."""
+        # ReportLab usa as fontes-base PDF, que preservam acentos em português
+        # sem depender da disponibilidade de fontes do Windows na máquina cliente.
+        documento = SimpleDocTemplate(
+            str(destino), pagesize=A4,
+            leftMargin=3 * cm, rightMargin=2 * cm,
+            topMargin=3 * cm, bottomMargin=2 * cm,
+            title="Currículo direcionado",
+        )
+        estilos = getSampleStyleSheet()
+        nome = ParagraphStyle(
+            "NomeCurriculo", parent=estilos["Normal"], fontName="Helvetica-Bold",
+            fontSize=15, leading=18, alignment=TA_CENTER, spaceAfter=3,
+        )
+        contato = ParagraphStyle(
+            "ContatoCurriculo", parent=estilos["Normal"], fontName="Helvetica",
+            fontSize=10, leading=13, alignment=TA_CENTER, spaceAfter=14,
+        )
+        titulo = ParagraphStyle(
+            "TituloCurriculo", parent=estilos["Normal"], fontName="Helvetica-Bold",
+            fontSize=12, leading=15, alignment=TA_LEFT, spaceBefore=8, spaceAfter=4,
+        )
+        corpo = ParagraphStyle(
+            "CorpoCurriculo", parent=estilos["Normal"], fontName="Helvetica",
+            fontSize=11, leading=16.5, alignment=TA_JUSTIFY, spaceAfter=3,
+        )
+        historia = []
+        for secao, linhas in self._curriculo_blocos(dados):
+            if secao == "__cabecalho__":
+                nome_completo, contatos = linhas
+                historia.append(Paragraph(self._escapar_pdf(nome_completo.upper()), nome))
                 if contatos:
-                    escrever(contatos, 10, False, True, 12)
+                    historia.append(Paragraph(self._escapar_pdf(contatos), contato))
                 continue
-            escrever(titulo, 12, True, False, 2)
+            historia.append(Paragraph(self._escapar_pdf(secao), titulo))
             for linha in linhas:
-                escrever(linha, 11, False, False, 5)
-            y += 3
-        painter.end()
+                historia.append(Paragraph(self._escapar_pdf(linha), corpo))
+            historia.append(Spacer(1, 2))
+        documento.build(historia)
+
+    @staticmethod
+    def _escapar_pdf(texto):
+        return (str(texto).replace("&", "&amp;").replace("<", "&lt;")
+                .replace(">", "&gt;").replace("\n", "<br/>"))

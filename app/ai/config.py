@@ -20,6 +20,10 @@ class AIConfig:
         ""
     ).strip()
 
+    # O envio de currículo para um serviço externo só é permitido após
+    # consentimento explícito, registrado localmente no arquivo .env.
+    OPENAI_DATA_CONSENT = os.getenv("OPENAI_DATA_CONSENT", "false").strip().lower() in {"1", "true", "sim", "yes"}
+
     OLLAMA_URL = os.getenv(
         "OLLAMA_URL",
         "http://localhost:11434"
@@ -34,3 +38,4 @@ class AIConfig:
     # local. O valor pode ser ajustado nas configurações para modelos lentos.
     OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "60"))
     OLLAMA_CONNECT_TIMEOUT = int(os.getenv("OLLAMA_CONNECT_TIMEOUT", "5"))
+    OPENAI_TIMEOUT = int(os.getenv("OPENAI_TIMEOUT", "60"))

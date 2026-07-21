@@ -6,7 +6,7 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtCore import QUrl
 from PySide6.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QHBoxLayout, QFormLayout, QLineEdit,
-    QPushButton, QComboBox, QGroupBox, QMessageBox,
+    QPushButton, QComboBox, QGroupBox, QMessageBox, QCheckBox,
 )
 
 from app.ai.config import AIConfig, ENV_FILE
@@ -51,11 +51,15 @@ class SettingsPage(QWidget):
         self.ollama_timeout = QLineEdit(str(AIConfig.OLLAMA_TIMEOUT))
         self.openai_model = QLineEdit(AIConfig.OPENAI_MODEL)
         self.openai_model.setToolTip("A chave da OpenAI permanece somente no arquivo .env e não é exibida aqui.")
+        self.openai_consent = QCheckBox("Autorizo o envio do currículo para a OpenAI quando este provedor for utilizado.")
+        self.openai_consent.setChecked(AIConfig.OPENAI_DATA_CONSENT)
+        self.openai_consent.setToolTip("O currículo pode conter dados pessoais. Sem esta autorização, a aplicação usa Ollama local ou a análise local.")
         form_ia.addRow("Provedor", self.provider)
         form_ia.addRow("URL do Ollama", self.ollama_url)
         form_ia.addRow("Modelo do Ollama", self.ollama_model)
         form_ia.addRow("Timeout do Ollama (segundos)", self.ollama_timeout)
         form_ia.addRow("Modelo OpenAI", self.openai_model)
+        form_ia.addRow("Privacidade OpenAI", self.openai_consent)
         layout.addWidget(grupo_ia)
 
         acoes_ia = QHBoxLayout()
@@ -111,6 +115,7 @@ class SettingsPage(QWidget):
             "OLLAMA_MODEL": self.ollama_model.text().strip(),
             "OLLAMA_TIMEOUT": self.ollama_timeout.text().strip(),
             "OPENAI_MODEL": self.openai_model.text().strip(),
+            "OPENAI_DATA_CONSENT": "true" if self.openai_consent.isChecked() else "false",
         }
         if not all(valores.values()) or not valores["OLLAMA_TIMEOUT"].isdigit() or int(valores["OLLAMA_TIMEOUT"]) < 5:
             QMessageBox.warning(self, "Configurações", "Preencha todos os campos de IA antes de salvar.")

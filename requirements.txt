@@ -5,3 +5,4 @@ openai>=1.50,<3
 python-dotenv>=1,<2
 requests>=2.32,<3
 beautifulsoup4>=4.12,<5
+reportlab>=4,<6

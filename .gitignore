@@ -12,6 +12,8 @@ data/*.db-shm
 data/reports/
 data/resumes/*
 !data/resumes/.gitkeep
+logs/
+tmp/
 
 .env
 .venv/

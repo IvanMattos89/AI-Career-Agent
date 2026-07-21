@@ -49,8 +49,12 @@ Em **Configurações**, escolha Ollama, OpenAI ou modo automático. Caso a IA n�
 - Currículos, análises e histórico são armazenados localmente em `data/`.
 - O conteúdo do currículo não deve ser registrado nos logs.
 - `.env`, banco SQLite, relatórios e currículos importados são ignorados pelo Git.
-- Antes de usar um provedor externo, revise as configurações e os dados que serão enviados.
+- A OpenAI só é usada após autorização explícita em **Configurações**. Sem consentimento, o app usa Ollama local ou análise local.
 - Em **Histórico**, a exclusão de currículo remove análises e comparações relacionadas.
+
+### Publicação segura do repositório
+
+Nunca versionar `data/`, `logs/`, arquivos `.env`, relatórios ou currículos importados. Caso algum desses itens já tenha sido enviado ao repositório remoto, removê-lo da branch atual não basta: o histórico remoto deve ser sanitizado com uma ferramenta como `git filter-repo` e o push forçado deve ser realizado somente por quem administra o repositório.
 
 ## Arquitetura atual
 
