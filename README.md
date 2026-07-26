@@ -1,4 +1,3 @@
-<<<<<<< ours
 # AI Career Agent
 
 Aplicação desktop para analisar currículos, encontrar vagas brasileiras, comparar aderência e organizar candidaturas.
@@ -96,4 +95,3 @@ Importação de currículo, análise ATS, Job Match e dashboard.
 - Migrações versionadas e modelos normalizados de vagas.
 - Consentimento explícito antes do envio a provedores externos.
 - Cobertura de testes, lint, CI e empacotamento Windows.
-=======

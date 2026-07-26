@@ -1,68 +1,47 @@
-
-﻿# Python
+# Python
 __pycache__/
 *.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Virtual Environment
+# Ambientes virtuais
 .venv/
 venv/
 
-# Environment
+# Build e distribuição
+build/
+dist/
+
+# Variáveis de ambiente
 .env
+.env.*
 
-# SQLite
+# Bancos de dados
 *.db
-
-# Logs
-*.log
-
-# VSCode
-.vscode/
-
-# PyCharm
-.idea/
-
-# Imported resumes
-data/resumes/
-=======
-<<<<<<< ours
-﻿__pycache__/
-*.py[cod]
-
-*.bak
-*.bkp
-*.camada2
-
+*.db-journal
+*.db-wal
+*.db-shm
 data/*.db
 data/*.db-journal
 data/*.db-wal
 data/*.db-shm
+
+# Dados pessoais e arquivos gerados
 data/reports/
 data/resumes/*
 !data/resumes/.gitkeep
 logs/
 tmp/
-
-.env
-.venv/
-venv/
-.pytest_cache/
 temp_*
 *.tmp
+*.bak
+*.bkp
 
+# IDEs
 .vscode/
 .idea/
 
+# Backups
 backup/
-=======
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.venv/
-build/
-dist/
-*.egg-info/
->>>>>>> theirs
-
-
-tmp/
