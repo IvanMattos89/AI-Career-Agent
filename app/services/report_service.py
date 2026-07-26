@@ -1,9 +1,8 @@
 from datetime import datetime
-from pathlib import Path
 
 from docx import Document
-from docx.shared import Inches, Pt, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Cm, Inches, Pt
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -52,6 +51,37 @@ class ReportService:
         destino = self.output_dir / f"job_match_{datetime.now():%Y%m%d_%H%M%S}.docx"
         documento.save(destino)
         return destino
+
+    def exportar_job_match_pdf(self, resultado, destino):
+        """Gera PDF legível em A4 sem depender das fontes instaladas no Windows."""
+        documento = SimpleDocTemplate(
+            str(destino), pagesize=A4,
+            leftMargin=2.5 * cm, rightMargin=2.0 * cm,
+            topMargin=2.5 * cm, bottomMargin=2.0 * cm,
+            title="Relatório de Job Match",
+        )
+        estilos = getSampleStyleSheet()
+        titulo = ParagraphStyle("TituloJobMatch", parent=estilos["Normal"], fontName="Helvetica-Bold", fontSize=16, leading=20, spaceAfter=12)
+        secao = ParagraphStyle("SecaoJobMatch", parent=estilos["Normal"], fontName="Helvetica-Bold", fontSize=12, leading=15, spaceBefore=8, spaceAfter=4)
+        corpo = ParagraphStyle("CorpoJobMatch", parent=estilos["Normal"], fontName="Helvetica", fontSize=10.5, leading=15, alignment=TA_JUSTIFY, spaceAfter=3)
+        historia = [
+            Paragraph("RELATÓRIO DE JOB MATCH", titulo),
+            Paragraph(f"Compatibilidade: <b>{int(resultado.get('compatibilidade', 0))}%</b>", corpo),
+            Paragraph("COMO A NOTA FOI CALCULADA", secao),
+            Paragraph(self._escapar_pdf(resultado.get("explicacao", "-")), corpo),
+        ]
+        for cabecalho, chave in (
+            ("COMPETÊNCIAS ENCONTRADAS", "competencias_encontradas"),
+            ("COMPETÊNCIAS A DESENVOLVER", "competencias_faltantes"),
+            ("RECOMENDAÇÕES", "recomendacoes"),
+        ):
+            historia.append(Paragraph(cabecalho, secao))
+            itens = resultado.get(chave, []) or []
+            if itens:
+                historia.extend(Paragraph("• " + self._escapar_pdf(item), corpo) for item in itens)
+            else:
+                historia.append(Paragraph("Nenhum item identificado.", corpo))
+        documento.build(historia)
 
     def exportar_pacote_candidatura_docx(self, pacote):
         documento = Document()

@@ -13,7 +13,7 @@ class ApplicationStudioService:
 
     def gerar_pacote(self, oportunidade_id):
         vaga = self.db.obter_oportunidade(oportunidade_id)
-        analise = self.db.obter_ultima_analise()
+        analise = self.db.obter_analise_ativa()
         if not vaga:
             raise ValueError("Oportunidade não encontrada.")
         if not analise:

@@ -4,7 +4,7 @@ from app.services.career_assistant_service import CareerAssistantService
 
 
 class _Db:
-    def obter_ultima_analise(self):
+    def obter_analise_ativa(self):
         return {
             "cargo": "Analista Fiscal", "area": "Fiscal", "senioridade": "Pleno",
             "hard_skills": "Excel; ICMS", "pontos_melhoria": "", "competencias_faltantes": "", "resumo": "",

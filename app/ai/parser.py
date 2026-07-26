@@ -1,11 +1,10 @@
 ﻿import json
-
 import re
 
-from app.ai.validator import validate
-from app.ai.normalizer import normalize
 from app.ai.ats_score import calculate
 from app.ai.models import ResumeAnalysis
+from app.ai.normalizer import normalize
+from app.ai.validator import validate
 
 
 def parse_resume_analysis(resposta):

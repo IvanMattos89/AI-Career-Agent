@@ -15,7 +15,7 @@ class AnalysisPageTest(unittest.TestCase):
 
     def test_loads_saved_analysis_when_resume_exists(self):
         page = AnalysisPage()
-        page.db = type("Db", (), {"obter_ultima_analise": lambda _self: {
+        page.db = type("Db", (), {"obter_analise_ativa": lambda _self: {
             "ats_score": 80, "cargo": "Analista Fiscal", "area": "Fiscal e Tributária",
             "senioridade": "Pleno", "anos_experiencia": 3, "hard_skills": "EFD; Excel",
             "soft_skills": "", "tecnologias": "ERP", "idiomas": "", "certificacoes": "",

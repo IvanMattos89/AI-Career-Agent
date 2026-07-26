@@ -1,22 +1,34 @@
 import json
-import textwrap
 from urllib.parse import quote_plus
 
 from PySide6.QtCore import QThread, QUrl
-from PySide6.QtGui import QPainter, QPdfWriter, QPageSize, QDesktopServices
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QWidget, QLabel, QTextEdit, QPushButton, QVBoxLayout, QHBoxLayout,
-    QMessageBox, QFileDialog, QTableWidget, QTableWidgetItem, QHeaderView,
-    QAbstractItemView, QLineEdit, QComboBox, QScrollArea, QFrame,
+    QAbstractItemView,
+    QComboBox,
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QTableWidget,
+    QTableWidgetItem,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
 
 from app.database.sqlite_db import Database
-from app.services.report_service import ReportService
 from app.services.job_search_service import JobSearchService
+from app.services.report_service import ReportService
 from app.services.resume_adaptation_service import ResumeAdaptationService
 from app.ui.widgets.score_card import ScoreCard
 from app.ui.widgets.section_card import SectionCard
-from app.ui.workers import JobMatchWorker, JobSearchWorker, JobBatchMatchWorker
+from app.ui.workers import JobBatchMatchWorker, JobMatchWorker, JobSearchWorker
 
 
 class JobMatchPage(QWidget):
@@ -161,7 +173,7 @@ class JobMatchPage(QWidget):
         self.carregar_curriculo_ativo()
 
     def carregar_curriculo_ativo(self):
-        analise = self.db.obter_ultima_analise()
+        analise = self.db.obter_analise_ativa()
         if not analise:
             self.perfil_ativo.setText("Nenhum currículo analisado. Importe um currículo em “Meu currículo” para ativar a busca personalizada.")
             self.btnBuscarPerfil.setEnabled(False)
@@ -216,7 +228,7 @@ class JobMatchPage(QWidget):
 
     def buscar_para_curriculo(self, silencioso=False):
         self.carregar_curriculo_ativo()
-        if not self.db.obter_ultima_analise():
+        if not self.db.obter_analise_ativa():
             return
         try:
             self.txtBusca.setText(JobSearchService().termo_para_curriculo())
@@ -424,28 +436,7 @@ class JobMatchPage(QWidget):
         if not destino:
             return
         try:
-            writer = QPdfWriter(destino)
-            writer.setPageSize(QPageSize(QPageSize.A4))
-            writer.setResolution(96)
-            painter = QPainter(writer)
-            painter.setFont(self.font())
-            y, margem, largura = 70, 55, 80
-            def escrever(texto, destaque=False):
-                nonlocal y
-                painter.setFont(self.font())
-                fonte = painter.font(); fonte.setBold(destaque); painter.setFont(fonte)
-                for linha in textwrap.wrap(str(texto), width=largura) or [""]:
-                    if y > 1080:
-                        writer.newPage(); y = 70
-                    painter.drawText(margem, y, linha); y += 20
-                y += 8
-            escrever("Relatório de Job Match", True)
-            escrever(f"Compatibilidade: {self.resultado_atual['compatibilidade']}%", True)
-            escrever("Como a nota foi calculada", True); escrever(self.resultado_atual.get("explicacao", ""))
-            for titulo, chave in (("Competências encontradas", "competencias_encontradas"), ("Competências faltantes", "competencias_faltantes"), ("Recomendações", "recomendacoes")):
-                escrever(titulo, True)
-                for item in self.resultado_atual.get(chave, []): escrever("• " + item)
-            painter.end()
+            self.relatorios.exportar_job_match_pdf(self.resultado_atual, destino)
             QMessageBox.information(self, "Relatório criado", f"PDF salvo em:\n{destino}")
         except Exception as erro:
             QMessageBox.critical(self, "Erro ao exportar PDF", str(erro))

@@ -1,3 +1,4 @@
+<<<<<<< ours
 ﻿__pycache__/
 *.py[cod]
 
@@ -26,3 +27,12 @@ temp_*
 .idea/
 
 backup/
+=======
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+build/
+dist/
+*.egg-info/
+>>>>>>> theirs

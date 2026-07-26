@@ -1,24 +1,22 @@
 ﻿from PySide6.QtCore import Qt
-
-
 from PySide6.QtWidgets import (
-    QWidget,
     QHBoxLayout,
-    QVBoxLayout,
-    QPushButton,
     QLabel,
     QMainWindow,
-    QStackedWidget
+    QPushButton,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
 )
 
+from app.config import APP_NAME, APP_VERSION
+from app.ui.history_page import HistoryPage
+from app.ui.pages.analysis_page import AnalysisPage
+from app.ui.pages.career_hub_page import CareerHubPage
+from app.ui.pages.dashboard_page import DashboardPage
 from app.ui.pages.job_match_page import JobMatchPage
 from app.ui.resume_page import ResumePage
-from app.ui.history_page import HistoryPage
 from app.ui.settings_page import SettingsPage
-from app.ui.pages.analysis_page import AnalysisPage
-from app.ui.pages.dashboard_page import DashboardPage
-from app.ui.pages.career_hub_page import CareerHubPage
-from app.config import APP_NAME, APP_VERSION
 
 
 class MainWindow(QMainWindow):

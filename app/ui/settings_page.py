@@ -1,15 +1,23 @@
 from pathlib import Path
 
 from dotenv import set_key
-from PySide6.QtCore import Qt, QThread
+from PySide6.QtCore import QThread, QUrl
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtCore import QUrl
 from PySide6.QtWidgets import (
-    QWidget, QLabel, QVBoxLayout, QHBoxLayout, QFormLayout, QLineEdit,
-    QPushButton, QComboBox, QGroupBox, QMessageBox, QCheckBox,
+    QCheckBox,
+    QComboBox,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
 
-from app.ai.config import AIConfig, ENV_FILE
+from app.ai.config import ENV_FILE, AIConfig
 from app.config import DATABASE, REPORTS_DIR
 from app.database.sqlite_db import Database
 from app.ui.workers import OllamaStatusWorker
@@ -54,12 +62,16 @@ class SettingsPage(QWidget):
         self.openai_consent = QCheckBox("Autorizo o envio do currículo para a OpenAI quando este provedor for utilizado.")
         self.openai_consent.setChecked(AIConfig.OPENAI_DATA_CONSENT)
         self.openai_consent.setToolTip("O currículo pode conter dados pessoais. Sem esta autorização, a aplicação usa Ollama local ou a análise local.")
+        self.ollama_external_consent = QCheckBox("Autorizo envio ao Ollama quando a URL não for local (localhost).")
+        self.ollama_external_consent.setChecked(AIConfig.OLLAMA_EXTERNAL_CONSENT)
+        self.ollama_external_consent.setToolTip("Necessário somente se a URL do Ollama apontar para outro computador ou serviço remoto.")
         form_ia.addRow("Provedor", self.provider)
         form_ia.addRow("URL do Ollama", self.ollama_url)
         form_ia.addRow("Modelo do Ollama", self.ollama_model)
         form_ia.addRow("Timeout do Ollama (segundos)", self.ollama_timeout)
         form_ia.addRow("Modelo OpenAI", self.openai_model)
         form_ia.addRow("Privacidade OpenAI", self.openai_consent)
+        form_ia.addRow("Privacidade Ollama", self.ollama_external_consent)
         layout.addWidget(grupo_ia)
 
         acoes_ia = QHBoxLayout()
@@ -116,6 +128,7 @@ class SettingsPage(QWidget):
             "OLLAMA_TIMEOUT": self.ollama_timeout.text().strip(),
             "OPENAI_MODEL": self.openai_model.text().strip(),
             "OPENAI_DATA_CONSENT": "true" if self.openai_consent.isChecked() else "false",
+            "OLLAMA_EXTERNAL_CONSENT": "true" if self.ollama_external_consent.isChecked() else "false",
         }
         if not all(valores.values()) or not valores["OLLAMA_TIMEOUT"].isdigit() or int(valores["OLLAMA_TIMEOUT"]) < 5:
             QMessageBox.warning(self, "Configurações", "Preencha todos os campos de IA antes de salvar.")

@@ -10,7 +10,7 @@ class CareerAssistantService:
         self.llm = LLMClient()
 
     def _contexto(self):
-        analise = self.db.obter_ultima_analise()
+        analise = self.db.obter_analise_ativa()
         if not analise:
             return "Ainda não há currículo analisado. Oriente o usuário a importar e analisar um currículo."
         return (
@@ -98,7 +98,7 @@ class CareerAssistantService:
         return {"nota": nota, "feedback": feedback}
 
     def plano_de_acao(self):
-        analise = self.db.obter_ultima_analise()
+        analise = self.db.obter_analise_ativa()
         if not analise:
             return ["Importe e analise um currículo para gerar um plano personalizado."]
         itens = []

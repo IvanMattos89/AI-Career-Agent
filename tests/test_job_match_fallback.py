@@ -7,7 +7,7 @@ class _FakeDb:
     def __init__(self):
         self.saved = None
 
-    def obter_ultima_analise(self):
+    def obter_analise_ativa(self):
         return {
             "resume_id": 7, "nome_arquivo": "curriculo.docx", "cargo": "Analista Fiscal",
             "area": "Fiscal", "senioridade": "Pleno", "hard_skills": "Excel; ICMS",

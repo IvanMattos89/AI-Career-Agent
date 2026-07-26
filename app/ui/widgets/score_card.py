@@ -1,9 +1,4 @@
-﻿from PySide6.QtWidgets import (
-    QFrame,
-    QLabel,
-    QVBoxLayout,
-    QProgressBar
-)
+﻿from PySide6.QtWidgets import QFrame, QLabel, QProgressBar, QVBoxLayout
 
 from app.ui.themes.style import *
 from app.utils.score import classify_score

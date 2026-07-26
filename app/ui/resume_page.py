@@ -1,7 +1,15 @@
 from pathlib import Path
 
 from PySide6.QtCore import QThread
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QFileDialog, QPlainTextEdit, QMessageBox
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QLabel,
+    QMessageBox,
+    QPlainTextEdit,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from app.services.resume_service import ResumeService
 from app.ui.workers import ResumeAnalysisWorker, ResumeImportWorker

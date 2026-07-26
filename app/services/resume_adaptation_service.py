@@ -18,7 +18,7 @@ class ResumeAdaptationService:
         descricao = JobMatchService.limpar_descricao(descricao_vaga)
         if not descricao:
             raise ValueError("Cole uma descrição de vaga antes de adequar o currículo.")
-        analise = self.db.obter_ultima_analise()
+        analise = self.db.obter_analise_ativa()
         if not analise:
             raise RuntimeError("Analise um currículo antes de gerar uma versão adaptada.")
         curriculo = self.db.obter_curriculo(analise["resume_id"])

@@ -16,7 +16,7 @@ class JobSearchRecommendationTest(unittest.TestCase):
     def test_location_filter_accepts_brazilian_city_and_state_format(self):
         self.assertTrue(JobSearchService._localizacao_elegivel("São Paulo / SP", "SP", "São Paulo"))
 
-    @patch("app.services.job_search_service.Database.obter_ultima_analise")
+    @patch("app.services.job_search_service.Database.obter_analise_ativa")
     def test_recommends_brazilian_fiscal_titles(self, obter_analise):
         obter_analise.return_value = {
             "cargo": "Analista Fiscal",
@@ -30,7 +30,7 @@ class JobSearchRecommendationTest(unittest.TestCase):
         self.assertIn("SPED Fiscal", resultado["palavras_chave"])
         self.assertEqual(resultado["consultas_fontes"], ["tax accountant", "accountant"])
 
-    @patch("app.services.job_search_service.Database.obter_ultima_analise")
+    @patch("app.services.job_search_service.Database.obter_analise_ativa")
     def test_uses_broader_query_when_exact_query_returns_no_vacancies(self, obter_analise):
         obter_analise.return_value = {"cargo": "Analista Fiscal", "hard_skills": "ICMS; SPED"}
         service = JobSearchService()

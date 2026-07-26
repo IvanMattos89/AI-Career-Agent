@@ -18,6 +18,8 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
       - name: Verificar código Python
-        run: python -m compileall -q app
+        run: |
+          python -m compileall -q app
+          python -m ruff check app tests
       - name: Executar testes
         run: python -m unittest discover -s tests -v

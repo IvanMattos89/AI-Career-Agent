@@ -1,4 +1,5 @@
-﻿from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel
+﻿from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout
+
 from app.ui.themes.style import *
 
 

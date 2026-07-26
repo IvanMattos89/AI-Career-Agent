@@ -1,3 +1,6 @@
+import ipaddress
+from urllib.parse import urlparse
+
 import requests
 from openai import OpenAI
 
@@ -21,7 +24,24 @@ class LLMClient:
     def _openai_autorizada(self):
         return self.client is not None and AIConfig.OPENAI_DATA_CONSENT
 
+    @property
+    def _ollama_local(self):
+        host = (urlparse(AIConfig.OLLAMA_URL).hostname or "").lower()
+        if host == "localhost":
+            return True
+        try:
+            return ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            return False
+
+    @property
+    def _ollama_autorizado(self):
+        return self._ollama_local or AIConfig.OLLAMA_EXTERNAL_CONSENT
+
     def _ollama_disponivel(self):
+        if not self._ollama_autorizado:
+            logger.info("Ollama externo não utilizado: consentimento para dados externos não concedido")
+            return False
         try:
             resposta = requests.get(f"{AIConfig.OLLAMA_URL.rstrip('/')}/api/tags", timeout=AIConfig.OLLAMA_CONNECT_TIMEOUT)
             resposta.raise_for_status()
@@ -61,4 +81,6 @@ class LLMClient:
         if self.client is not None and self.provider in ("auto", "openai"):
             logger.info("OpenAI não utilizada: consentimento para dados externos não concedido")
             raise RuntimeError("O uso da OpenAI requer autorização em Configurações > Privacidade OpenAI.")
+        if self.provider == "ollama" and not self._ollama_autorizado:
+            raise RuntimeError("Ollama remoto requer autorização em Configurações > Privacidade Ollama.")
         raise RuntimeError("Nenhum provedor de IA disponível.")

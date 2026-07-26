@@ -1,15 +1,24 @@
 from urllib.parse import quote_plus
 
-from PySide6.QtCore import QThread, QUrl, Signal, Qt
+from PySide6.QtCore import Qt, QThread, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTextEdit,
-    QLineEdit, QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
-    QTabWidget, QMessageBox,
+    QComboBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
 
 from app.database.sqlite_db import Database
-from app.services.career_assistant_service import CareerAssistantService
 from app.services.job_search_service import JobSearchService
 from app.services.report_service import ReportService
 from app.ui.workers import CareerWorker
@@ -98,7 +107,7 @@ class CareerHubPage(QWidget):
 
     def atualizar_perfil(self):
         """Exibe uma síntese determinística da última análise, sem nova chamada à IA."""
-        analise = self.db.obter_ultima_analise()
+        analise = self.db.obter_analise_ativa()
         if not analise:
             self.perfil_resumo.setText(
                 "<b>Seu perfil ainda não está ativo.</b> Importe e analise um currículo em “Meu currículo” "

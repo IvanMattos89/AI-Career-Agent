@@ -2,7 +2,7 @@ from html import escape
 
 from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout
 
-from app.ui.themes.style import CARD_BACKGROUND, BORDER, CARD_RADIUS, PRIMARY, TEXT, TEXT_SECONDARY
+from app.ui.themes.style import BORDER, CARD_BACKGROUND, CARD_RADIUS, PRIMARY, TEXT, TEXT_SECONDARY
 
 
 class SectionCard(QFrame):

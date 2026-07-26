@@ -4,7 +4,7 @@ from app.services.resume_adaptation_service import ResumeAdaptationService
 
 
 class _Db:
-    def obter_ultima_analise(self):
+    def obter_analise_ativa(self):
         return {
             "resume_id": 1, "nome_arquivo": "curriculo.docx", "cargo": "Analista Fiscal",
             "area": "Fiscal e Tributária", "hard_skills": "Excel; ICMS; SPED", "tecnologias": "ERP; Excel",

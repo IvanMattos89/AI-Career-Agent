@@ -47,3 +47,18 @@ class ReportServiceTest(unittest.TestCase):
             self.assertEqual(round(documento.sections[0].left_margin.cm), 3)
             self.assertEqual(round(documento.sections[0].right_margin.cm), 2)
             self.assertIn("RESUMO PROFISSIONAL", [p.text for p in documento.paragraphs])
+
+    def test_generates_job_match_pdf(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            destino = Path(pasta) / "job_match.pdf"
+            resultado = {
+                "compatibilidade": 78,
+                "explicacao": "Há aderência entre as competências e os requisitos.",
+                "competencias_encontradas": ["ICMS", "Excel"],
+                "competencias_faltantes": ["Power BI"],
+                "recomendacoes": ["Inclua resultados mensuráveis."],
+            }
+            ReportService().exportar_job_match_pdf(resultado, destino)
+            texto = "\n".join(pagina.extract_text() or "" for pagina in PdfReader(destino).pages)
+            self.assertIn("RELATÓRIO DE JOB MATCH", texto)
+            self.assertIn("78%", texto)

@@ -1,13 +1,8 @@
-﻿from PySide6.QtWidgets import (
-    QWidget,
-    QLabel,
-    QVBoxLayout,
-    QGridLayout
-)
+﻿from PySide6.QtWidgets import QGridLayout, QLabel, QVBoxLayout, QWidget
 
+from app.services.dashboard_service import DashboardService
 from app.ui.widgets.info_card import InfoCard
 from app.ui.widgets.recent_analysis_card import RecentAnalysisCard
-from app.services.dashboard_service import DashboardService
 
 
 class DashboardPage(QWidget):

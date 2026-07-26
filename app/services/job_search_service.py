@@ -198,7 +198,7 @@ class JobSearchService:
 
     def recomendacao_para_curriculo(self):
         """Retorna títulos brasileiros e palavras-chave alinhados ao currículo ativo."""
-        analise = Database().obter_ultima_analise()
+        analise = Database().obter_analise_ativa()
         if not analise:
             raise ValueError("Analise um currículo antes de buscar vagas recomendadas.")
         cargo = (analise["cargo"] or "").strip()

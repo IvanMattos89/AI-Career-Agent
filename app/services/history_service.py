@@ -15,6 +15,9 @@ class HistoryService:
     def excluir_curriculo(self, resume_id):
         self.db.excluir_curriculo(resume_id)
 
+    def definir_curriculo_ativo(self, resume_id):
+        self.db.definir_curriculo_ativo(resume_id)
+
     def excluir_analise(self, resume_id):
         self.db.excluir_analise(resume_id)
 

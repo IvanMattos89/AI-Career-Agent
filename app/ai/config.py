@@ -1,4 +1,5 @@
 ﻿import os
+
 from dotenv import load_dotenv
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -28,6 +29,8 @@ class AIConfig:
         "OLLAMA_URL",
         "http://localhost:11434"
     )
+
+    OLLAMA_EXTERNAL_CONSENT = os.getenv("OLLAMA_EXTERNAL_CONSENT", "false").strip().lower() in {"1", "true", "sim", "yes"}
 
     OLLAMA_MODEL = os.getenv(
         "OLLAMA_MODEL",

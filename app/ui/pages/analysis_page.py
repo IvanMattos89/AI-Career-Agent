@@ -1,17 +1,17 @@
-﻿from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
+﻿from types import SimpleNamespace
+
+from PySide6.QtWidgets import (
+    QFrame,
     QGridLayout,
     QLabel,
     QScrollArea,
-    QFrame,
+    QVBoxLayout,
+    QWidget,
 )
 
-from types import SimpleNamespace
-
 from app.database.sqlite_db import Database
-from app.ui.widgets.score_card import ScoreCard
 from app.ui.widgets.info_card import InfoCard
+from app.ui.widgets.score_card import ScoreCard
 from app.ui.widgets.section_card import SectionCard
 
 
@@ -178,7 +178,7 @@ class AnalysisPage(QWidget):
 
     def carregar_ultima_analise(self):
         """Reabre a última análise persistida ao entrar nesta tela."""
-        registro = self.db.obter_ultima_analise()
+        registro = self.db.obter_analise_ativa()
         if not registro:
             return False
         habilidades = self._lista(registro["hard_skills"])

@@ -1,9 +1,9 @@
-﻿import sqlite3
-from pathlib import Path
+﻿import hashlib
 import json
-import hashlib
+import sqlite3
+from pathlib import Path
 
-from app.config import DATA_DIR, DATABASE
+from app.config import DATA_DIR, DATABASE, RESUMES_DIR
 
 
 class Database:
@@ -82,6 +82,16 @@ class Database:
             certificacoes TEXT,
 
             resumo TEXT
+        )
+        """)
+
+        # Mantém a escolha explícita do currículo que alimenta os recursos de
+        # análise, busca e candidatura. Assim, importar outro arquivo não faz
+        # o usuário perder o contexto da vaga em andamento.
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS app_state(
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
         )
         """)
 
@@ -245,6 +255,7 @@ class Database:
         content_hash = hashlib.sha256(texto.encode("utf-8", errors="ignore")).hexdigest()
         existente = self.conn.execute("SELECT id FROM resumes WHERE content_hash = ?", (content_hash,)).fetchone()
         if existente:
+            self.definir_curriculo_ativo(existente["id"])
             return existente["id"]
 
         cursor = self.conn.cursor()
@@ -264,8 +275,9 @@ class Database:
         """, (nome, caminho, texto, content_hash))
 
         self.conn.commit()
-
-        return cursor.lastrowid
+        resume_id = cursor.lastrowid
+        self.definir_curriculo_ativo(resume_id)
+        return resume_id
 
     def listar_curriculos(self):
 
@@ -317,8 +329,10 @@ class Database:
         return cursor.fetchone()
 
     def excluir_curriculo(self, resume_id):
-
         cursor = self.conn.cursor()
+        registro = self.obter_curriculo(resume_id)
+        if not registro:
+            return False
         try:
             # Bancos criados antes da migration usavam FK sem CASCADE em
             # resume_analysis. A limpeza explícita mantém a exclusão segura
@@ -327,6 +341,7 @@ class Database:
             cursor.execute("DELETE FROM resume_analysis WHERE resume_id = ?", (resume_id,))
             cursor.execute("DELETE FROM resumes WHERE id = ?", (resume_id,))
             cursor.execute("DELETE FROM jobs WHERE id NOT IN (SELECT DISTINCT job_id FROM job_matches)")
+            cursor.execute("DELETE FROM app_state WHERE key = 'active_resume_id' AND value = ?", (str(resume_id),))
         except sqlite3.Error:
             self.conn.rollback()
             raise
@@ -339,8 +354,46 @@ class Database:
             cursor.execute(
                 "DELETE FROM sqlite_sequence WHERE name='resumes'"
             )
+        elif self.obter_curriculo_ativo_id() is None:
+            proximo = self.conn.execute("SELECT id FROM resumes ORDER BY data_importacao DESC, id DESC LIMIT 1").fetchone()
+            if proximo:
+                self.definir_curriculo_ativo(proximo["id"])
 
         self.conn.commit()
+        self._remover_arquivo_curriculo(registro["caminho"])
+        return True
+
+    @staticmethod
+    def _remover_arquivo_curriculo(caminho):
+        """Apaga somente cópias gerenciadas pelo aplicativo, nunca o original."""
+        try:
+            arquivo = Path(caminho).resolve()
+            pasta = RESUMES_DIR.resolve()
+            if arquivo.is_relative_to(pasta) and arquivo.is_file():
+                arquivo.unlink()
+        except OSError:
+            # O banco já foi atualizado; um arquivo bloqueado pode ser apagado
+            # em uma nova tentativa sem comprometer a integridade dos dados.
+            pass
+
+    def definir_curriculo_ativo(self, resume_id):
+        if not self.conn.execute("SELECT 1 FROM resumes WHERE id = ?", (resume_id,)).fetchone():
+            raise ValueError("Currículo não encontrado para ativação.")
+        self.conn.execute(
+            "INSERT INTO app_state(key, value) VALUES('active_resume_id', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (str(resume_id),),
+        )
+        self.conn.commit()
+
+    def obter_curriculo_ativo_id(self):
+        estado = self.conn.execute("SELECT value FROM app_state WHERE key = 'active_resume_id'").fetchone()
+        if not estado:
+            return None
+        try:
+            return int(estado["value"])
+        except (TypeError, ValueError):
+            return None
 
     # ==========================================================
     # JOB MATCH
@@ -356,6 +409,21 @@ class Database:
             LIMIT 1
         """)
         return cursor.fetchone()
+
+    def obter_analise_ativa(self):
+        """Obtém a análise do currículo escolhido; usa a mais recente no primeiro uso."""
+        resume_id = self.obter_curriculo_ativo_id()
+        if resume_id is None:
+            registro = self.obter_ultima_analise()
+            if registro:
+                self.definir_curriculo_ativo(registro["resume_id"])
+            return registro
+        return self.conn.execute("""
+            SELECT a.*, r.nome_arquivo
+            FROM resume_analysis a JOIN resumes r ON r.id = a.resume_id
+            WHERE a.resume_id = ?
+            ORDER BY a.created_at DESC, a.id DESC LIMIT 1
+        """, (resume_id,)).fetchone()
 
     def salvar_job_match(self, resume_id, descricao, resultado, titulo=None):
         cursor = self.conn.cursor()
@@ -472,6 +540,7 @@ class Database:
 
         cursor = self.conn.cursor()
 
+        caminhos = [row["caminho"] for row in cursor.execute("SELECT caminho FROM resumes").fetchall()]
         cursor.execute("DELETE FROM job_matches")
         cursor.execute("DELETE FROM jobs")
         cursor.execute("DELETE FROM resumes")
@@ -479,8 +548,10 @@ class Database:
         cursor.execute(
             "DELETE FROM sqlite_sequence WHERE name='resumes'"
         )
-
+        cursor.execute("DELETE FROM app_state WHERE key = 'active_resume_id'")
         self.conn.commit()
+        for caminho in caminhos:
+            self._remover_arquivo_curriculo(caminho)
 
     # ==========================================================
     # ANÁLISES DOS CURRÍCULOS
@@ -558,6 +629,7 @@ class Database:
         ))
 
         self.conn.commit()
+        self.definir_curriculo_ativo(resume_id)
 
     def obter_analise(self, resume_id):
 

@@ -1,7 +1,7 @@
 ﻿import hashlib
 import json
-from app.config import CACHE_DIR
 
+from app.config import CACHE_DIR
 
 CACHE = CACHE_DIR
 

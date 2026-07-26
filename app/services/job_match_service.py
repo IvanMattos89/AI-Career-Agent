@@ -4,6 +4,7 @@ from html import unescape
 
 from app.ai.analyzer import ResumeAnalyzer
 from app.ai.logging_config import logger
+from app.ai.skill_detector import SkillDetector
 from app.database.sqlite_db import Database
 from app.prompts.job_match_prompt import criar_prompt
 
@@ -44,13 +45,16 @@ class JobMatchService:
         habilidades = list(dict.fromkeys(habilidades))
         vaga_lower = vaga.lower()
         encontradas = [item for item in habilidades if re.search(r"(?<!\w)" + re.escape(item.lower()) + r"(?!\w)", vaga_lower)]
-        score = round((len(encontradas) / max(len(habilidades), 1)) * 100)
+        requisitos = SkillDetector().detectar(vaga)
+        faltantes = [item for item in requisitos if item.casefold() not in {habilidade.casefold() for habilidade in habilidades}]
+        base = requisitos or habilidades
+        score = round((len(encontradas) / max(len(base), 1)) * 100)
         return {
             "compatibilidade": score,
             "competencias_encontradas": encontradas,
-            "competencias_faltantes": [],
+            "competencias_faltantes": faltantes,
             "recomendacoes": ["Inclua evidências práticas das competências mais importantes da vaga."],
-            "explicacao": "Estimativa local baseada nas competências do currículo encontradas na descrição da vaga.",
+            "explicacao": "Estimativa local baseada nas competências identificadas na vaga e comprovadas no currículo.",
             "resumo": "Comparação local concluída sem uso do modelo de IA.",
         }
 
@@ -59,7 +63,7 @@ class JobMatchService:
         if not descricao_vaga:
             raise ValueError("A descrição da vaga não contém texto utilizável.")
 
-        analise = self.db.obter_ultima_analise()
+        analise = self.db.obter_analise_ativa()
         if analise is None:
             raise RuntimeError("Nenhum currículo analisado foi encontrado.")
 

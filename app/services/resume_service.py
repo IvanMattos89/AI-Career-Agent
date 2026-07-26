@@ -1,16 +1,16 @@
-﻿from pathlib import Path
-from shutil import copy2
-from hashlib import sha256
-from zipfile import BadZipFile, ZipFile
+﻿import re
 from dataclasses import dataclass
-import re
+from hashlib import sha256
+from pathlib import Path
+from shutil import copy2
+from zipfile import BadZipFile, ZipFile
 
 from docx import Document
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
-from app.database.sqlite_db import Database
 from app.config import RESUMES_DIR
+from app.database.sqlite_db import Database
 
 
 @dataclass(frozen=True)
