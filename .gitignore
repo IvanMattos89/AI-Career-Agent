@@ -45,3 +45,6 @@ temp_*
 
 # Backups
 backup/
+*.camada2
+
+.coverage

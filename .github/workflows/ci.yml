@@ -1,25 +1,35 @@
-name: CI
+﻿name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
 
 jobs:
-  tests:
+  quality:
     runs-on: windows-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Instalar dependências
+          cache: pip
+
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
           pip install -r requirements-dev.txt
-      - name: Verificar código Python
-        run: |
-          python -m compileall -q app
-          python -m ruff check app tests
-      - name: Executar testes
-        run: python -m unittest discover -s tests -v
+
+      - name: Ruff
+        run: python -m ruff check .
+
+      - name: MyPy
+        run: python -m mypy app
+
+      - name: Pytest
+        run: python -m pytest
