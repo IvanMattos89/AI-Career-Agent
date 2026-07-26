@@ -1,15 +1,14 @@
-﻿from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
+﻿from PySide6.QtWidgets import (
+    QAbstractItemView,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
+    QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
-    QMessageBox,
-    QHeaderView,
-    QAbstractItemView
+    QVBoxLayout,
+    QWidget,
 )
 
 from app.services.history_service import HistoryService
@@ -37,10 +36,12 @@ class HistoryPage(QWidget):
 
         self.btn_atualizar = QPushButton("🔄 Atualizar")
         self.btn_abrir = QPushButton("📄 Abrir")
+        self.btn_ativar = QPushButton("✓ Usar como ativo")
         self.btn_excluir = QPushButton("🗑 Excluir")
 
         barra.addWidget(self.btn_atualizar)
         barra.addWidget(self.btn_abrir)
+        barra.addWidget(self.btn_ativar)
         barra.addWidget(self.btn_excluir)
         barra.addStretch()
 
@@ -73,6 +74,7 @@ class HistoryPage(QWidget):
 
         self.btn_atualizar.clicked.connect(self.carregar_curriculos)
         self.btn_abrir.clicked.connect(self.abrir_curriculo)
+        self.btn_ativar.clicked.connect(self.definir_curriculo_ativo)
         self.btn_excluir.clicked.connect(self.excluir_curriculo)
 
         self.carregar_curriculos()
@@ -97,7 +99,7 @@ class HistoryPage(QWidget):
 
             self.tabela.setItem(
                 linha,2,
-                QTableWidgetItem(str(registro[4]))
+                QTableWidgetItem(str(registro[2]))
             )
 
     def abrir_curriculo(self):
@@ -145,4 +147,13 @@ class HistoryPage(QWidget):
         if resposta == QMessageBox.Yes:
             self.service.excluir_curriculo(resume_id)
             self.carregar_curriculos()
+
+    def definir_curriculo_ativo(self):
+        linha = self.tabela.currentRow()
+        if linha == -1:
+            QMessageBox.information(self, "Currículo ativo", "Selecione um currículo.")
+            return
+        resume_id = int(self.tabela.item(linha, 0).text())
+        self.service.definir_curriculo_ativo(resume_id)
+        QMessageBox.information(self, "Currículo ativo", "Currículo ativo atualizado para buscas e análises futuras.")
 

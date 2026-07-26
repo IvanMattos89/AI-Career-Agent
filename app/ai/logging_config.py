@@ -1,19 +1,11 @@
-﻿import logging
+import logging
 from pathlib import Path
 
-
-Path("app/logs").mkdir(parents=True, exist_ok=True)
-
-
-logging.basicConfig(
-
-    filename="app/logs/agent.log",
-
-    level=logging.INFO,
-
-    format="%(asctime)s %(levelname)s %(message)s"
-
-)
-
-
-logger = logging.getLogger("CareerAgent")
+LOG_DIR = Path(__file__).resolve().parents[2] / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+logger = logging.getLogger("ai_career_agent")
+if not logger.handlers:
+    handler = logging.FileHandler(LOG_DIR / "ai_career_agent.log", encoding="utf-8")
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)

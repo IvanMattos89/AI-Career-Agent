@@ -1,93 +1,86 @@
-﻿import requests
+import ipaddress
+from urllib.parse import urlparse
+
+import requests
 from openai import OpenAI
 
 from app.ai.config import AIConfig
+from app.ai.logging_config import logger
 
 
 class LLMClient:
-
     def __init__(self):
         self.provider = AIConfig.PROVIDER
-        self.client = None
+        self.client = OpenAI(api_key=AIConfig.OPENAI_API_KEY, timeout=AIConfig.OPENAI_TIMEOUT) if AIConfig.OPENAI_API_KEY else None
 
-        if (
-            self.provider == "openai"
-            and AIConfig.OPENAI_API_KEY
-        ):
-            self.client = OpenAI(
-                api_key=AIConfig.OPENAI_API_KEY
-            )
+    @staticmethod
+    def _timeout(timeout):
+        """Separa conexão curta e tempo de resposta configurável."""
+        if isinstance(timeout, tuple):
+            return timeout
+        return (AIConfig.OLLAMA_CONNECT_TIMEOUT, int(timeout or AIConfig.OLLAMA_TIMEOUT))
+
+    @property
+    def _openai_autorizada(self):
+        return self.client is not None and AIConfig.OPENAI_DATA_CONSENT
+
+    @property
+    def _ollama_local(self):
+        host = (urlparse(AIConfig.OLLAMA_URL).hostname or "").lower()
+        if host == "localhost":
+            return True
+        try:
+            return ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            return False
+
+    @property
+    def _ollama_autorizado(self):
+        return self._ollama_local or AIConfig.OLLAMA_EXTERNAL_CONSENT
+
+    def _ollama_disponivel(self):
+        if not self._ollama_autorizado:
+            logger.info("Ollama externo não utilizado: consentimento para dados externos não concedido")
+            return False
+        try:
+            resposta = requests.get(f"{AIConfig.OLLAMA_URL.rstrip('/')}/api/tags", timeout=AIConfig.OLLAMA_CONNECT_TIMEOUT)
+            resposta.raise_for_status()
+            return True
+        except requests.RequestException as erro:
+            logger.info("Ollama indisponível: %s", erro)
+            return False
 
     def disponivel(self):
+        return (self.provider in ("auto", "ollama") and self._ollama_disponivel()) or (self.provider in ("auto", "openai") and self._openai_autorizada)
 
-        if self.provider == "ollama":
+    def perguntar(self, prompt, json_mode=True, timeout=None):
+        if self.provider in ("auto", "ollama") and self._ollama_disponivel():
             try:
-                requests.get(
-                    AIConfig.OLLAMA_URL + "/api/tags",
-                    timeout=5
-                ).raise_for_status()
-                return True
-            except Exception as e:
-                print("ERRO AO CONECTAR AO OLLAMA:", e)
-                return False
-
-        return self.client is not None
-
-    def perguntar(self, prompt):
-
-        if self.provider == "ollama":
-
-            prompt_final = (
-                "Você é um especialista em RH, recrutamento, ATS e análise de currículos.\n\n"
-                + prompt[:12000]
-            )
-
-            print("=" * 80)
-            print("USANDO OLLAMA")
-            print("MODELO:", AIConfig.OLLAMA_MODEL)
-            print("TAMANHO DO PROMPT:", len(prompt_final))
-            print("=" * 80)
-
-            resposta = requests.post(
-                AIConfig.OLLAMA_URL + "/api/generate",
-                json={
-                    "model": AIConfig.OLLAMA_MODEL,
-                    "prompt": prompt_final,
-                    "stream": False,
-                    "format": "json"
-                },
-                timeout=300
-            )
-
-            resposta.raise_for_status()
-
-            dados = resposta.json()
-
-            conteudo = dados.get("response", "")
-
-        else:
-
+                payload = {"model": AIConfig.OLLAMA_MODEL, "prompt": prompt[:12000], "stream": False}
+                if json_mode:
+                    payload["format"] = "json"
+                resposta = requests.post(
+                    f"{AIConfig.OLLAMA_URL.rstrip('/')}/api/generate",
+                    json=payload,
+                    timeout=self._timeout(timeout),
+                )
+                resposta.raise_for_status()
+                return resposta.json().get("response", "")
+            except requests.RequestException as erro:
+                logger.warning("Falha no Ollama: %s", erro)
+                if self.provider == "ollama":
+                    raise RuntimeError(f"Falha no Ollama: {erro}") from erro
+        if self._openai_autorizada and self.provider in ("auto", "openai"):
             resposta = self.client.chat.completions.create(
                 model=AIConfig.OPENAI_MODEL,
                 temperature=0.2,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "Você é especialista em RH, recrutamento e análise de currículos."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
+                timeout=timeout or AIConfig.OPENAI_TIMEOUT,
+                messages=[{"role": "system", "content": "Você é especialista em RH e carreira."}, {"role": "user", "content": prompt}],
             )
-
-            conteudo = resposta.choices[0].message.content
-
-        print("=" * 80)
-        print("RESPOSTA DA IA")
-        print("=" * 80)
-        print(conteudo)
-        print("=" * 80)
-
-        return conteudo
+            return resposta.choices[0].message.content or ""
+        if self.client is not None and self.provider in ("auto", "openai"):
+            logger.info("OpenAI não utilizada: consentimento para dados externos não concedido")
+            raise RuntimeError("O uso da OpenAI requer autorização em Configurações > Privacidade OpenAI.")
+        if self.provider == "ollama" and not self._ollama_autorizado:
+            raise RuntimeError("Ollama remoto requer autorização em Configurações > Privacidade Ollama.")
+        raise RuntimeError("Nenhum provedor de IA disponível.")

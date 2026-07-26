@@ -1,4 +1,5 @@
 ﻿import os
+
 from dotenv import load_dotenv
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -20,12 +21,24 @@ class AIConfig:
         ""
     ).strip()
 
+    # O envio de currículo para um serviço externo só é permitido após
+    # consentimento explícito, registrado localmente no arquivo .env.
+    OPENAI_DATA_CONSENT = os.getenv("OPENAI_DATA_CONSENT", "false").strip().lower() in {"1", "true", "sim", "yes"}
+
     OLLAMA_URL = os.getenv(
         "OLLAMA_URL",
         "http://localhost:11434"
     )
 
+    OLLAMA_EXTERNAL_CONSENT = os.getenv("OLLAMA_EXTERNAL_CONSENT", "false").strip().lower() in {"1", "true", "sim", "yes"}
+
     OLLAMA_MODEL = os.getenv(
         "OLLAMA_MODEL",
         "llama3.1:8b"
     )
+
+    # Mantém a aplicação responsiva: após um minuto o worker usa o fallback
+    # local. O valor pode ser ajustado nas configurações para modelos lentos.
+    OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "60"))
+    OLLAMA_CONNECT_TIMEOUT = int(os.getenv("OLLAMA_CONNECT_TIMEOUT", "5"))
+    OPENAI_TIMEOUT = int(os.getenv("OPENAI_TIMEOUT", "60"))

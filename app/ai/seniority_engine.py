@@ -14,7 +14,9 @@ def estimate(texto: str):
         anos = max(int(a) for a in anos)
 
         if anos >= 10:
-            score += 40
+            # Dez ou mais anos já representam um sinal suficiente de
+            # senioridade, mesmo quando o currículo não cita grandes empresas.
+            score += 45
         elif anos >= 8:
             score += 35
         elif anos >= 5:

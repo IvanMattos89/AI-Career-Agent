@@ -7,13 +7,20 @@ class HistoryService:
         self.db = Database()
 
     def listar_curriculos(self):
-        return self.db.listar_curriculos_completos()
+        return self.db.listar_historico()
 
-    def obter_curriculo(self, curriculo_id):
-        return self.db.obter_curriculo(curriculo_id)
+    def obter_curriculo(self, resume_id):
+        return self.db.obter_curriculo(resume_id)
 
-    def excluir_curriculo(self, curriculo_id):
-        self.db.excluir_curriculo(curriculo_id)
+    def excluir_curriculo(self, resume_id):
+        self.db.excluir_curriculo(resume_id)
 
-    def limpar_historico(self):
-        self.db.limpar_historico()
+    def definir_curriculo_ativo(self, resume_id):
+        self.db.definir_curriculo_ativo(resume_id)
+
+    def excluir_analise(self, resume_id):
+        self.db.excluir_analise(resume_id)
+
+    def remover_curriculo(self, resume_id):
+        self.db.excluir_analise(resume_id)
+        self.db.excluir_curriculo(resume_id)

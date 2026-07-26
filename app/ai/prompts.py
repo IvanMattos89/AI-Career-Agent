@@ -94,6 +94,43 @@ Escreva um resumo entre 80 e 150 palavras descrevendo:
 
 Nunca invente informações.
 
+ANOS DE EXPERIÊNCIA
+
+Informe o número aproximado de anos de experiência identificado no currículo.
+
+NÍVEL DO CURRÍCULO
+
+Escolha apenas um:
+
+- Básico
+- Intermediário
+- Avançado
+- Excelente
+
+PALAVRAS-CHAVE
+
+Liste as principais palavras-chave para ATS.
+
+PONTOS FORTES
+
+Liste os principais diferenciais do candidato.
+
+PONTOS DE MELHORIA
+
+Liste oportunidades de melhoria no currículo.
+
+COMPETÊNCIAS FALTANTES
+
+Liste competências relevantes para a área que não aparecem no currículo.
+
+RECOMENDAÇÕES
+
+Liste sugestões práticas para melhorar o currículo.
+
+ATS SCORE
+
+Retorne um valor inteiro entre 0 e 100 baseado na qualidade do currículo para sistemas ATS.
+
 Formato obrigatório:
 
 {{
@@ -101,11 +138,24 @@ Formato obrigatório:
     "area": "",
     "confianca": 0.0,
     "senioridade": "",
+
+    "anos_experiencia": 0,
+    "nivel_curriculo": "",
+
     "hard_skills": [],
     "soft_skills": [],
     "tecnologias": [],
     "idiomas": [],
     "certificacoes": [],
+
+    "palavras_chave": [],
+    "pontos_fortes": [],
+    "pontos_melhoria": [],
+    "competencias_faltantes": [],
+    "recomendacoes": [],
+
+    "ats_score": 0,
+
     "resumo": ""
 }}
 
