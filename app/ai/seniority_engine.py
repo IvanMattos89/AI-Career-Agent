@@ -1,27 +1,27 @@
-﻿import re
+import re
 
 
-def estimate(texto: str):
+def estimate(texto: str) -> str:
 
     texto = texto.lower()
 
     score = 0
 
     # Tempo de experiência
-    anos = re.findall(r"(\d+)\+?\s*anos", texto)
+    anos_encontrados = re.findall(r"(\d+)\+?\s*anos", texto)
 
-    if anos:
-        anos = max(int(a) for a in anos)
+    if anos_encontrados:
+        maior_tempo = max(int(ano) for ano in anos_encontrados)
 
-        if anos >= 10:
+        if maior_tempo >= 10:
             # Dez ou mais anos já representam um sinal suficiente de
             # senioridade, mesmo quando o currículo não cita grandes empresas.
             score += 45
-        elif anos >= 8:
+        elif maior_tempo >= 8:
             score += 35
-        elif anos >= 5:
+        elif maior_tempo >= 5:
             score += 25
-        elif anos >= 2:
+        elif maior_tempo >= 2:
             score += 15
 
     # Empresas de grande porte
