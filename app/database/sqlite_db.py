@@ -242,8 +242,109 @@ class Database:
             except sqlite3.OperationalError:
                 pass
 
+        self._aplicar_migracoes(cursor)
+
         self.conn.commit()
-     
+
+    def _aplicar_migracoes(self, cursor):
+        """Aplica evoluções incrementais e registra cada versão executada."""
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS schema_migrations(
+                version INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        aplicadas = {row[0] for row in cursor.execute("SELECT version FROM schema_migrations")}
+        if 1 not in aplicadas:
+            self._migracao_busca_e_pipeline(cursor)
+            cursor.execute(
+                "INSERT INTO schema_migrations(version, name) VALUES(1, ?)",
+                ("busca_normalizada_e_pipeline",),
+            )
+
+    @staticmethod
+    def _migracao_busca_e_pipeline(cursor):
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS job_searches(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                query TEXT NOT NULL,
+                filters_json TEXT NOT NULL DEFAULT '{}',
+                providers_json TEXT NOT NULL DEFAULT '[]',
+                result_count INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS job_listings(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                external_id TEXT,
+                title TEXT NOT NULL,
+                company TEXT,
+                location TEXT,
+                modality TEXT,
+                seniority TEXT,
+                employment_type TEXT,
+                salary TEXT,
+                url TEXT,
+                description TEXT,
+                provider TEXT NOT NULL,
+                canonical_key TEXT NOT NULL UNIQUE,
+                decision TEXT NOT NULL DEFAULT 'nova',
+                rank_score INTEGER NOT NULL DEFAULT 0,
+                published_at TEXT,
+                first_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS job_search_results(
+                search_id INTEGER NOT NULL,
+                listing_id INTEGER NOT NULL,
+                position INTEGER NOT NULL,
+                rank_score INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY(search_id, listing_id),
+                FOREIGN KEY(search_id) REFERENCES job_searches(id) ON DELETE CASCADE,
+                FOREIGN KEY(listing_id) REFERENCES job_listings(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS application_history(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                opportunity_id INTEGER NOT NULL,
+                status_from TEXT,
+                status_to TEXT NOT NULL,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(opportunity_id) REFERENCES opportunities(id) ON DELETE CASCADE
+            )
+        """)
+        existing = {row[1] for row in cursor.execute("PRAGMA table_info(opportunities)")}
+        columns = {
+            "listing_id": "INTEGER",
+            "applied_at": "TEXT",
+            "salary_range": "TEXT",
+            "work_model": "TEXT",
+            "employment_type": "TEXT",
+            "recruiter_name": "TEXT",
+            "recruiter_email": "TEXT",
+            "recruiter_phone": "TEXT",
+            "next_action": "TEXT",
+            "next_action_at": "TEXT",
+            "resume_id": "INTEGER",
+            "job_match_id": "INTEGER",
+            "notes": "TEXT",
+        }
+        for name, definition in columns.items():
+            if name not in existing:
+                cursor.execute(f"ALTER TABLE opportunities ADD COLUMN {name} {definition}")
+        cursor.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_opportunities_listing "
+            "ON opportunities(listing_id) WHERE listing_id IS NOT NULL"
+        )
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_job_listings_decision ON job_listings(decision)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_opportunities_status ON opportunities(status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_opportunities_next_action ON opportunities(next_action_at)")
 
        
     # ==========================================================
@@ -465,6 +566,194 @@ class Database:
         return cursor.fetchone()
 
     # ==========================================================
+    # V3.2: buscas e vagas encontradas
+    # ==========================================================
+
+    def iniciar_busca_vagas(self, query, filters=None, providers=None):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "INSERT INTO job_searches(query, filters_json, providers_json) VALUES (?, ?, ?)",
+            (
+                query,
+                json.dumps(filters or {}, ensure_ascii=False),
+                json.dumps(providers or [], ensure_ascii=False),
+            ),
+        )
+        self.conn.commit()
+        return cursor.lastrowid
+
+    def concluir_busca_vagas(self, search_id, result_count):
+        self.conn.execute(
+            "UPDATE job_searches SET result_count = ? WHERE id = ?",
+            (int(result_count), search_id),
+        )
+        self.conn.commit()
+
+    def salvar_vaga_encontrada(self, vaga, search_id=None, position=0):
+        """Insere ou atualiza uma vaga normalizada sem perder decisões do usuário."""
+        cursor = self.conn.cursor()
+        values = (
+            vaga.get("external_id", ""), vaga["titulo"], vaga.get("empresa", ""),
+            vaga.get("localizacao", ""), vaga.get("modality", ""), vaga.get("seniority", ""),
+            vaga.get("employment_type", ""), vaga.get("salary", ""), vaga.get("url", ""),
+            vaga.get("descricao", ""), vaga.get("fonte", "Manual"), vaga["canonical_key"],
+            int(vaga.get("rank_score", 0)), vaga.get("published_at", ""),
+        )
+        cursor.execute("""
+            INSERT INTO job_listings(
+                external_id, title, company, location, modality, seniority, employment_type,
+                salary, url, description, provider, canonical_key, rank_score, published_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(canonical_key) DO UPDATE SET
+                external_id=excluded.external_id, title=excluded.title, company=excluded.company,
+                location=excluded.location, modality=excluded.modality, seniority=excluded.seniority,
+                employment_type=excluded.employment_type, salary=excluded.salary, url=excluded.url,
+                description=excluded.description, provider=excluded.provider,
+                rank_score=excluded.rank_score, published_at=excluded.published_at,
+                last_seen_at=CURRENT_TIMESTAMP
+        """, values)
+        listing = cursor.execute(
+            "SELECT id, decision FROM job_listings WHERE canonical_key = ?", (vaga["canonical_key"],)
+        ).fetchone()
+        if search_id is not None:
+            cursor.execute("""
+                INSERT OR REPLACE INTO job_search_results(search_id, listing_id, position, rank_score)
+                VALUES (?, ?, ?, ?)
+            """, (search_id, listing["id"], int(position), int(vaga.get("rank_score", 0))))
+        self.conn.commit()
+        return listing["id"], listing["decision"]
+
+    def definir_decisao_vaga(self, listing_id, decision):
+        valid = {"nova", "favorita", "descartada", "candidatura"}
+        if decision not in valid:
+            raise ValueError("Decisão de vaga inválida.")
+        self.conn.execute(
+            "UPDATE job_listings SET decision = ?, last_seen_at=CURRENT_TIMESTAMP WHERE id = ?",
+            (decision, listing_id),
+        )
+        self.conn.commit()
+
+    def obter_vaga_encontrada(self, listing_id):
+        return self.conn.execute("SELECT * FROM job_listings WHERE id = ?", (listing_id,)).fetchone()
+
+    def listar_vagas_encontradas(self, decision=None, limite=100):
+        if decision:
+            return self.conn.execute(
+                "SELECT * FROM job_listings WHERE decision = ? ORDER BY rank_score DESC, last_seen_at DESC LIMIT ?",
+                (decision, limite),
+            ).fetchall()
+        return self.conn.execute(
+            "SELECT * FROM job_listings ORDER BY last_seen_at DESC LIMIT ?", (limite,)
+        ).fetchall()
+
+    def converter_vaga_em_candidatura(self, listing_id, status="Preparando candidatura"):
+        vaga = self.obter_vaga_encontrada(listing_id)
+        if not vaga:
+            raise ValueError("Vaga não encontrada.")
+        existing = self.conn.execute(
+            "SELECT id FROM opportunities WHERE listing_id = ?", (listing_id,)
+        ).fetchone()
+        if existing:
+            return existing["id"]
+        resume_id = self.obter_curriculo_ativo_id()
+        cursor = self.conn.cursor()
+        source_key = self._chave_oportunidade(
+            vaga["title"], vaga["company"], vaga["provider"], vaga["url"]
+        )
+        cursor.execute("""
+            INSERT INTO opportunities(
+                titulo, empresa, plataforma, url, descricao, status, source_key, updated_at,
+                listing_id, salary_range, work_model, employment_type, resume_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?)
+        """, (
+            vaga["title"], vaga["company"], vaga["provider"], vaga["url"], vaga["description"],
+            status, source_key, listing_id, vaga["salary"], vaga["modality"],
+            vaga["employment_type"], resume_id,
+        ))
+        opportunity_id = cursor.lastrowid
+        cursor.execute(
+            "INSERT INTO application_history(opportunity_id, status_to, notes) VALUES (?, ?, ?)",
+            (opportunity_id, status, "Candidatura criada a partir da busca de vagas."),
+        )
+        cursor.execute("UPDATE job_listings SET decision='candidatura' WHERE id=?", (listing_id,))
+        self.conn.commit()
+        return opportunity_id
+
+    def listar_historico_candidatura(self, opportunity_id):
+        return self.conn.execute(
+            "SELECT * FROM application_history WHERE opportunity_id=? ORDER BY created_at DESC, id DESC",
+            (opportunity_id,),
+        ).fetchall()
+
+    def atualizar_candidatura(self, opportunity_id, **fields):
+        allowed = {
+            "status", "applied_at", "salary_range", "work_model", "employment_type",
+            "recruiter_name", "recruiter_email", "recruiter_phone", "next_action",
+            "next_action_at", "resume_id", "job_match_id", "notes",
+        }
+        updates = {key: value for key, value in fields.items() if key in allowed}
+        if not updates:
+            return
+        current = self.obter_oportunidade(opportunity_id)
+        if not current:
+            raise ValueError("Candidatura não encontrada.")
+        old_status = current["status"]
+        assignments = ", ".join(f"{key}=?" for key in updates)
+        self.conn.execute(
+            f"UPDATE opportunities SET {assignments}, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+            (*updates.values(), opportunity_id),
+        )
+        new_status = updates.get("status", old_status)
+        if new_status != old_status:
+            self.conn.execute("""
+                INSERT INTO application_history(opportunity_id, status_from, status_to, notes)
+                VALUES (?, ?, ?, ?)
+            """, (opportunity_id, old_status, new_status, updates.get("notes", "")))
+        self.conn.commit()
+
+    def candidaturas_para_acompanhamento(self, dias=0):
+        modifier = f"+{int(dias)} day"
+        return self.conn.execute("""
+            SELECT * FROM opportunities
+            WHERE next_action_at IS NOT NULL AND next_action_at != ''
+              AND date(next_action_at) <= date('now', ?)
+              AND status NOT IN ('Rejeitado', 'Encerrado')
+            ORDER BY date(next_action_at), updated_at
+        """, (modifier,)).fetchall()
+
+    def metricas_candidaturas(self):
+        total = self.conn.execute("SELECT COUNT(*) FROM opportunities").fetchone()[0]
+        retorno = self.conn.execute("""
+            SELECT COUNT(*) FROM opportunities
+            WHERE status IN ('Triagem', 'Entrevista com RH', 'Entrevista técnica', 'Proposta')
+        """).fetchone()[0]
+        entrevistas = self.conn.execute("""
+            SELECT COUNT(*) FROM opportunities
+            WHERE status IN ('Entrevista com RH', 'Entrevista técnica', 'Proposta')
+        """).fetchone()[0]
+        by_status = self.conn.execute(
+            "SELECT status, COUNT(*) AS total FROM opportunities GROUP BY status ORDER BY total DESC"
+        ).fetchall()
+        best_source = self.conn.execute("""
+            SELECT plataforma, COUNT(*) AS total FROM opportunities
+            WHERE status IN ('Entrevista com RH', 'Entrevista técnica', 'Proposta')
+            GROUP BY plataforma ORDER BY total DESC LIMIT 1
+        """).fetchone()
+        average_days = self.conn.execute("""
+            SELECT COALESCE(ROUND(AVG(julianday('now') - julianday(COALESCE(updated_at, created_at))), 1), 0)
+            FROM opportunities WHERE status NOT IN ('Rejeitado', 'Encerrado')
+        """).fetchone()[0]
+        return {
+            "total": total,
+            "retorno": round((retorno / total * 100), 1) if total else 0,
+            "entrevistas": round((entrevistas / total * 100), 1) if total else 0,
+            "por_status": {row["status"]: row["total"] for row in by_status},
+            "melhor_fonte": best_source["plataforma"] if best_source else "-",
+            "dias_sem_atualizacao": average_days,
+            "acompanhamentos": len(self.candidaturas_para_acompanhamento()),
+        }
+
+    # ==========================================================
     # V2: oportunidades, entrevistas e conversa
     # ==========================================================
 
@@ -481,19 +770,30 @@ class Database:
         cursor = self.conn.cursor()
         existente = cursor.execute("SELECT id FROM opportunities WHERE source_key = ?", (chave,)).fetchone() if chave else None
         if existente:
+            atual = cursor.execute("SELECT status FROM opportunities WHERE id = ?", (existente["id"],)).fetchone()
             cursor.execute("""
                 UPDATE opportunities
                 SET titulo=?, empresa=?, plataforma=?, url=?, descricao=?, status=?, updated_at=CURRENT_TIMESTAMP
                 WHERE id=?
             """, (titulo, empresa, plataforma, url, descricao, status, existente["id"]))
+            if atual and atual["status"] != status:
+                cursor.execute("""
+                    INSERT INTO application_history(opportunity_id, status_from, status_to, notes)
+                    VALUES (?, ?, ?, ?)
+                """, (existente["id"], atual["status"], status, "Atualização manual."))
             self.conn.commit()
             return existente["id"]
         cursor.execute("""
             INSERT INTO opportunities (titulo, empresa, plataforma, url, descricao, status, source_key, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         """, (titulo, empresa, plataforma, url, descricao, status, chave))
+        oportunidade_id = cursor.lastrowid
+        cursor.execute(
+            "INSERT INTO application_history(opportunity_id, status_to, notes) VALUES (?, ?, ?)",
+            (oportunidade_id, status, "Candidatura adicionada manualmente."),
+        )
         self.conn.commit()
-        return cursor.lastrowid
+        return oportunidade_id
 
     def listar_oportunidades(self):
         cursor = self.conn.cursor()
@@ -503,8 +803,7 @@ class Database:
         return self.conn.execute("SELECT * FROM opportunities WHERE id = ?", (oportunidade_id,)).fetchone()
 
     def atualizar_status_oportunidade(self, oportunidade_id, status):
-        self.conn.execute("UPDATE opportunities SET status = ?, updated_at=CURRENT_TIMESTAMP WHERE id = ?", (status, oportunidade_id))
-        self.conn.commit()
+        self.atualizar_candidatura(oportunidade_id, status=status)
 
     def salvar_mensagem_assistente(self, role, content):
         self.conn.execute("INSERT INTO assistant_messages (role, content) VALUES (?, ?)", (role, content))

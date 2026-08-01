@@ -4,12 +4,14 @@ from PySide6.QtCore import Qt, QThread, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QComboBox,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -28,6 +30,10 @@ class CareerHubPage(QWidget):
     """Central V2: oportunidades salvas, mentor de carreira e treino de entrevista."""
 
     busca_integrada_solicitada = Signal()
+    STATUS_CANDIDATURA = [
+        "Salva", "Preparando candidatura", "Candidatado", "Triagem",
+        "Entrevista com RH", "Entrevista técnica", "Proposta", "Rejeitado", "Encerrado",
+    ]
 
     def __init__(self):
         super().__init__()
@@ -39,18 +45,15 @@ class CareerHubPage(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         titulo = QLabel("Central de Carreira")
-        titulo.setStyleSheet("font-size:28px;font-weight:bold;color:#1976D2;")
+        titulo.setObjectName("pageTitle")
         layout.addWidget(titulo)
         self.perfil_resumo = QLabel()
         self.perfil_resumo.setWordWrap(True)
         self.perfil_resumo.setTextFormat(Qt.RichText)
-        self.perfil_resumo.setStyleSheet(
-            "background:#EAF3FF;border:1px solid #C9DDF7;border-radius:10px;"
-            "padding:14px;color:#174EA6;font-size:13px;"
-        )
+        self.perfil_resumo.setObjectName("profileBanner")
         layout.addWidget(self.perfil_resumo)
         abas = QTabWidget()
-        abas.addTab(self._aba_oportunidades(), "Oportunidades")
+        abas.addTab(self._aba_oportunidades(), "Candidaturas")
         abas.addTab(self._aba_chat(), "Assistente")
         abas.addTab(self._aba_entrevista(), "Simulador")
         abas.addTab(self._aba_plano(), "Plano de ação")
@@ -60,50 +63,89 @@ class CareerHubPage(QWidget):
         self.atualizar_perfil()
 
     def _aba_oportunidades(self):
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
         aba = QWidget(); layout = QVBoxLayout(aba)
+        scroll.setWidget(aba)
         instrucao = QLabel(
             "Use a busca integrada para vagas públicas. Nas plataformas que exigem conta, "
             "a pesquisa é aberta no seu navegador para que você entre com seu próprio login."
         )
         instrucao.setWordWrap(True)
-        instrucao.setStyleSheet("color:#52606D;padding:4px 0;")
+        instrucao.setObjectName("mutedText")
         layout.addWidget(instrucao)
+        self.pipeline_resumo = QLabel()
+        self.pipeline_resumo.setObjectName("profileBanner")
+        self.pipeline_resumo.setWordWrap(True)
+        layout.addWidget(self.pipeline_resumo)
         acoes_busca = QHBoxLayout()
         self.btn_busca_integrada = QPushButton("Buscar vagas para meu currículo")
         self.btn_busca_integrada.clicked.connect(self.busca_integrada_solicitada.emit)
         acoes_busca.addWidget(self.btn_busca_integrada)
         for plataforma in ("LinkedIn", "Gupy", "Indeed", "Catho", "Vagas.com"):
             botao = QPushButton(f"Abrir {plataforma}")
+            botao.setProperty("secondary", True)
             botao.clicked.connect(lambda _=False, nome=plataforma: self.abrir_plataforma(nome))
             acoes_busca.addWidget(botao)
         acoes_busca.addStretch()
         layout.addLayout(acoes_busca)
         self.status_busca = QLabel("")
         self.status_busca.setWordWrap(True)
-        self.status_busca.setStyleSheet("color:#52606D;")
+        self.status_busca.setObjectName("mutedText")
         layout.addWidget(self.status_busca)
         linha = QHBoxLayout()
         self.o_titulo = QLineEdit(); self.o_titulo.setPlaceholderText("Título da vaga *")
         self.o_empresa = QLineEdit(); self.o_empresa.setPlaceholderText("Empresa")
-        self.o_plataforma = QComboBox(); self.o_plataforma.addItems(["Manual", "LinkedIn", "Gupy", "Indeed", "Catho"])
+        self.o_plataforma = QComboBox(); self.o_plataforma.addItems(
+            ["Manual", "Vagas.com", "Greenhouse", "Lever", "LinkedIn", "Gupy", "Indeed", "Catho"]
+        )
         linha.addWidget(self.o_titulo, 2); linha.addWidget(self.o_empresa, 2); linha.addWidget(self.o_plataforma, 1)
         layout.addLayout(linha)
         self.o_url = QLineEdit(); self.o_url.setPlaceholderText("Link da vaga (opcional)")
         self.o_descricao = QTextEdit(); self.o_descricao.setPlaceholderText("Descrição ou observações da vaga (opcional)"); self.o_descricao.setMaximumHeight(100)
-        self.o_status = QComboBox(); self.o_status.addItems(["Salva", "Candidatura enviada", "Entrevista", "Encerrada"])
+        detalhes = QHBoxLayout()
+        self.o_salario = QLineEdit(); self.o_salario.setPlaceholderText("Faixa salarial")
+        self.o_modelo = QComboBox(); self.o_modelo.addItems(["Não informado", "Remoto", "Híbrido", "Presencial"])
+        self.o_contrato = QComboBox(); self.o_contrato.addItems(["Não informado", "CLT", "PJ", "Temporário", "Estágio"])
+        detalhes.addWidget(self.o_salario); detalhes.addWidget(self.o_modelo); detalhes.addWidget(self.o_contrato)
+        contato = QHBoxLayout()
+        self.o_recrutador = QLineEdit(); self.o_recrutador.setPlaceholderText("Nome do recrutador")
+        self.o_email = QLineEdit(); self.o_email.setPlaceholderText("E-mail do recrutador")
+        self.o_telefone = QLineEdit(); self.o_telefone.setPlaceholderText("Telefone")
+        contato.addWidget(self.o_recrutador); contato.addWidget(self.o_email); contato.addWidget(self.o_telefone)
+        acompanhamento = QHBoxLayout()
+        self.o_proxima_acao = QLineEdit(); self.o_proxima_acao.setPlaceholderText("Próxima ação")
+        self.o_prazo = QLineEdit(); self.o_prazo.setPlaceholderText("Prazo (AAAA-MM-DD)")
+        self.o_data_candidatura = QLineEdit(); self.o_data_candidatura.setPlaceholderText("Candidatura (AAAA-MM-DD)")
+        acompanhamento.addWidget(self.o_proxima_acao, 2); acompanhamento.addWidget(self.o_prazo); acompanhamento.addWidget(self.o_data_candidatura)
+        self.o_status = QComboBox(); self.o_status.addItems(self.STATUS_CANDIDATURA)
         self.o_salvar = QPushButton("Salvar oportunidade")
         self.o_salvar.clicked.connect(self.salvar_oportunidade)
         self.o_atualizar_status = QPushButton("Atualizar etapa da selecionada")
+        self.o_atualizar_status.setProperty("secondary", True)
         self.o_atualizar_status.clicked.connect(self.atualizar_etapa_oportunidade)
         acoes_oportunidade = QHBoxLayout(); acoes_oportunidade.addWidget(self.o_salvar); acoes_oportunidade.addWidget(self.o_atualizar_status); acoes_oportunidade.addStretch()
-        layout.addWidget(self.o_url); layout.addWidget(self.o_descricao); layout.addWidget(self.o_status); layout.addLayout(acoes_oportunidade)
-        self.tabela = QTableWidget(0, 5); self.tabela.setHorizontalHeaderLabels(["Vaga", "Empresa", "Plataforma", "Status", "Atualizada"])
+        layout.addWidget(self.o_url); layout.addLayout(detalhes); layout.addLayout(contato)
+        layout.addLayout(acompanhamento); layout.addWidget(self.o_descricao); layout.addWidget(self.o_status); layout.addLayout(acoes_oportunidade)
+        self.tabela = QTableWidget(0, 6); self.tabela.setHorizontalHeaderLabels(
+            ["Vaga", "Empresa", "Fonte", "Etapa", "Próxima ação", "Atualizada"]
+        )
         self.tabela.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.tabela.setSelectionBehavior(QTableWidget.SelectRows)
         self.tabela.setEditTriggers(QTableWidget.NoEditTriggers)
         self.tabela.cellDoubleClicked.connect(self.abrir_oportunidade_selecionada)
-        layout.addWidget(self.tabela); self.carregar_oportunidades()
-        return aba
+        self.tabela.itemSelectionChanged.connect(self.carregar_historico_selecionado)
+        layout.addWidget(self.tabela)
+        historico_titulo = QLabel("Histórico da candidatura")
+        historico_titulo.setObjectName("sectionTitle")
+        self.historico_candidatura = QTableWidget(0, 3)
+        self.historico_candidatura.setHorizontalHeaderLabels(["Data", "Mudança", "Observação"])
+        self.historico_candidatura.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.historico_candidatura.setMaximumHeight(130)
+        layout.addWidget(historico_titulo); layout.addWidget(self.historico_candidatura)
+        self.carregar_oportunidades()
+        return scroll
 
     def atualizar_perfil(self):
         """Exibe uma síntese determinística da última análise, sem nova chamada à IA."""
@@ -226,6 +268,7 @@ class CareerHubPage(QWidget):
         if not titulo:
             QMessageBox.warning(self, "Oportunidade", "Informe o título da vaga."); return
         oportunidade_id = self.db.salvar_oportunidade(titulo, self.o_empresa.text().strip(), self.o_plataforma.currentText(), self.o_url.text().strip(), self.o_descricao.toPlainText().strip(), self.o_status.currentText())
+        self.db.atualizar_candidatura(oportunidade_id, **self._dados_pipeline())
         self.o_titulo.clear(); self.o_empresa.clear(); self.o_url.clear(); self.o_descricao.clear(); self.carregar_oportunidades()
         self.status_busca.setText(f"Oportunidade #{oportunidade_id} salva. Se ela já existia, os dados foram atualizados sem criar duplicidade.")
 
@@ -236,9 +279,24 @@ class CareerHubPage(QWidget):
             return
         item = self.tabela.item(linha, 0)
         oportunidade_id = item.data(Qt.UserRole)
-        self.db.atualizar_status_oportunidade(oportunidade_id, self.o_status.currentText())
+        self.db.atualizar_candidatura(oportunidade_id, **self._dados_pipeline())
         self.carregar_oportunidades()
         self.status_busca.setText("Etapa da oportunidade atualizada.")
+
+    def _dados_pipeline(self):
+        return {
+            "status": self.o_status.currentText(),
+            "applied_at": self.o_data_candidatura.text().strip(),
+            "salary_range": self.o_salario.text().strip(),
+            "work_model": self.o_modelo.currentText(),
+            "employment_type": self.o_contrato.currentText(),
+            "recruiter_name": self.o_recrutador.text().strip(),
+            "recruiter_email": self.o_email.text().strip(),
+            "recruiter_phone": self.o_telefone.text().strip(),
+            "next_action": self.o_proxima_acao.text().strip(),
+            "next_action_at": self.o_prazo.text().strip(),
+            "notes": self.o_descricao.toPlainText().strip(),
+        }
 
     def abrir_oportunidade_selecionada(self, linha, _coluna):
         oportunidade_id = self.tabela.item(linha, 0).data(Qt.UserRole)
@@ -252,15 +310,61 @@ class CareerHubPage(QWidget):
             primeira = QTableWidgetItem(item["titulo"] or "-")
             primeira.setData(Qt.UserRole, item["id"])
             self.tabela.setItem(linha, 0, primeira)
-            for coluna, chave in enumerate(("empresa", "plataforma", "status"), start=1):
+            for coluna, chave in enumerate(("empresa", "plataforma", "status", "next_action"), start=1):
                 self.tabela.setItem(linha, coluna, QTableWidgetItem(item[chave] or "-"))
             data = str(item["updated_at"] or item["created_at"] or "")[:16]
-            self.tabela.setItem(linha, 4, QTableWidgetItem(data or "-"))
+            self.tabela.setItem(linha, 5, QTableWidgetItem(data or "-"))
+        metricas = self.db.metricas_candidaturas()
+        self.pipeline_resumo.setText(
+            f"<b>{metricas['total']}</b> candidaturas &nbsp; • &nbsp; "
+            f"<b>{metricas['retorno']}%</b> de retorno &nbsp; • &nbsp; "
+            f"<b>{metricas['entrevistas']}%</b> chegaram a entrevista &nbsp; • &nbsp; "
+            f"<b>{metricas['acompanhamentos']}</b> ações pendentes &nbsp; • &nbsp; "
+            f"Melhor fonte: <b>{metricas['melhor_fonte']}</b>"
+        )
         if hasattr(self, "seletor_vaga"):
             self.seletor_vaga.clear()
             for item in dados:
                 label = f"{item['titulo']} — {item['empresa'] or 'Empresa não informada'}"
                 self.seletor_vaga.addItem(label, item["id"])
+
+    def carregar_historico_selecionado(self):
+        linha = self.tabela.currentRow()
+        if linha < 0:
+            self.historico_candidatura.setRowCount(0)
+            return
+        opportunity_id = self.tabela.item(linha, 0).data(Qt.UserRole)
+        opportunity = self.db.obter_oportunidade(opportunity_id)
+        if opportunity:
+            self.o_titulo.setText(opportunity["titulo"] or "")
+            self.o_empresa.setText(opportunity["empresa"] or "")
+            self.o_url.setText(opportunity["url"] or "")
+            self.o_descricao.setPlainText(opportunity["notes"] or opportunity["descricao"] or "")
+            for combo, value in (
+                (self.o_plataforma, opportunity["plataforma"]),
+                (self.o_status, opportunity["status"]),
+                (self.o_modelo, opportunity["work_model"]),
+                (self.o_contrato, opportunity["employment_type"]),
+            ):
+                index = combo.findText(value or "")
+                if index >= 0:
+                    combo.setCurrentIndex(index)
+            self.o_salario.setText(opportunity["salary_range"] or "")
+            self.o_recrutador.setText(opportunity["recruiter_name"] or "")
+            self.o_email.setText(opportunity["recruiter_email"] or "")
+            self.o_telefone.setText(opportunity["recruiter_phone"] or "")
+            self.o_proxima_acao.setText(opportunity["next_action"] or "")
+            self.o_prazo.setText(opportunity["next_action_at"] or "")
+            self.o_data_candidatura.setText(opportunity["applied_at"] or "")
+        history = self.db.listar_historico_candidatura(opportunity_id)
+        self.historico_candidatura.setRowCount(len(history))
+        for row, item in enumerate(history):
+            change = item["status_to"]
+            if item["status_from"]:
+                change = f"{item['status_from']} → {item['status_to']}"
+            self.historico_candidatura.setItem(row, 0, QTableWidgetItem(str(item["created_at"])[:16]))
+            self.historico_candidatura.setItem(row, 1, QTableWidgetItem(change))
+            self.historico_candidatura.setItem(row, 2, QTableWidgetItem(item["notes"] or "-"))
 
     def resposta_chat(self, resposta):
         pergunta = self.chat_input.text().strip()

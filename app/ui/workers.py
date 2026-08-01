@@ -26,12 +26,17 @@ class JobSearchWorker(QObject):
     finished = Signal(list)
     failed = Signal(str)
 
-    def __init__(self, termo=None, para_curriculo=False, estado="", cidade=""):
+    def __init__(
+        self, termo=None, para_curriculo=False, estado="", cidade="",
+        modalidade="", senioridade="",
+    ):
         super().__init__()
         self.termo = termo
         self.para_curriculo = para_curriculo
         self.estado = estado
         self.cidade = cidade
+        self.modalidade = modalidade
+        self.senioridade = senioridade
 
     @Slot()
     def run(self):
@@ -39,10 +44,16 @@ class JobSearchWorker(QObject):
             from app.services.job_search_service import JobSearchService
             service = JobSearchService()
             if self.para_curriculo:
-                resultado = service.buscar_para_curriculo(estado=self.estado, cidade=self.cidade)
+                resultado = service.buscar_para_curriculo(
+                    estado=self.estado, cidade=self.cidade,
+                    modalidade=self.modalidade, senioridade=self.senioridade,
+                )
                 self.finished.emit(resultado["vagas"])
             else:
-                self.finished.emit(service.buscar(self.termo, estado=self.estado, cidade=self.cidade))
+                self.finished.emit(service.buscar(
+                    self.termo, estado=self.estado, cidade=self.cidade,
+                    modalidade=self.modalidade, senioridade=self.senioridade,
+                ))
         except Exception as erro:
             self.failed.emit(str(erro))
 

@@ -24,9 +24,12 @@ class ResumePage(QWidget):
         self.import_thread = None
         self.import_worker = None
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(14)
         self.lbl_titulo = QLabel("Meu Currículo")
-        self.lbl_titulo.setStyleSheet("font-size:20px;font-weight:bold;")
+        self.lbl_titulo.setObjectName("pageTitle")
         self.lbl_arquivo = QLabel("Nenhum currículo selecionado.")
+        self.lbl_arquivo.setObjectName("pageSubtitle")
         self.btn_selecionar = QPushButton("Selecionar Currículo")
         self.btn_selecionar.clicked.connect(self.selecionar_curriculo)
         self.editor = QPlainTextEdit()

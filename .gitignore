@@ -5,46 +5,33 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
 
-# Ambientes virtuais
+# Ambientes virtuais e build
 .venv/
 venv/
-
-# Build e distribuição
 build/
 dist/
 
-# Variáveis de ambiente
+# Configuração local e dados pessoais
 .env
 .env.*
-
-# Bancos de dados
 *.db
 *.db-journal
 *.db-wal
 *.db-shm
-data/*.db
-data/*.db-journal
-data/*.db-wal
-data/*.db-shm
-
-# Dados pessoais e arquivos gerados
 data/reports/
 data/resumes/*
 !data/resumes/.gitkeep
 logs/
 tmp/
+
+# Arquivos temporários e IDEs
 temp_*
 *.tmp
 *.bak
 *.bkp
-
-# IDEs
+*.camada2
+backup/
 .vscode/
 .idea/
-
-# Backups
-backup/
-*.camada2
-
-.coverage

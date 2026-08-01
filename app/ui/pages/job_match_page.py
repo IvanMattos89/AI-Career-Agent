@@ -57,14 +57,14 @@ class JobMatchPage(QWidget):
         scroll.setWidget(container)
         outer_layout.addWidget(scroll)
         layout = QVBoxLayout(container)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(28, 24, 28, 24)
         layout.setSpacing(12)
         titulo = QLabel("Job Match")
-        titulo.setStyleSheet("font-size:28px;font-weight:bold;color:#1976D2;")
+        titulo.setObjectName("pageTitle")
         layout.addWidget(titulo)
         self.perfil_ativo = QLabel()
         self.perfil_ativo.setWordWrap(True)
-        self.perfil_ativo.setStyleSheet("background:#EAF3FF;border:1px solid #C9DDF7;border-radius:10px;padding:12px;color:#174EA6;font-size:13px;")
+        self.perfil_ativo.setObjectName("profileBanner")
         layout.addWidget(self.perfil_ativo)
         layout.addWidget(QLabel("Buscar vagas remotas automaticamente"))
         busca = QHBoxLayout()
@@ -78,6 +78,15 @@ class JobMatchPage(QWidget):
         self.txtCidade = QLineEdit()
         self.txtCidade.setPlaceholderText("Cidade (opcional)")
         self.txtCidade.setMaximumWidth(190)
+        self.cmbModalidade = QComboBox()
+        self.cmbModalidade.addItem("Qualquer modalidade", "")
+        self.cmbModalidade.addItem("Remoto", "Remoto")
+        self.cmbModalidade.addItem("Híbrido", "Híbrido")
+        self.cmbModalidade.addItem("Presencial", "Presencial")
+        self.cmbSenioridade = QComboBox()
+        self.cmbSenioridade.addItem("Qualquer senioridade", "")
+        for nivel in ("Júnior", "Pleno", "Sênior", "Especialista", "Coordenação", "Gerência"):
+            self.cmbSenioridade.addItem(nivel, nivel)
         self.btnBuscar = QPushButton("Buscar vagas")
         self.btnBuscar.clicked.connect(self.buscar_vagas)
         self.btnBuscarPerfil = QPushButton("Buscar para meu currículo")
@@ -90,29 +99,54 @@ class JobMatchPage(QWidget):
         self.btnIndeed.clicked.connect(lambda: self.abrir_pesquisa_externa("Indeed"))
         self.btnAbrirVaga = QPushButton("Abrir vaga selecionada")
         self.btnAbrirVaga.clicked.connect(self.abrir_vaga_selecionada)
+        for botao in (self.btnBuscarPerfil, self.btnGoogle, self.btnLinkedIn, self.btnIndeed, self.btnAbrirVaga):
+            botao.setProperty("secondary", True)
         busca.addWidget(self.txtBusca)
         busca.addWidget(self.cmbEstado)
         busca.addWidget(self.txtCidade)
-        busca.addWidget(self.btnBuscar)
-        busca.addWidget(self.btnBuscarPerfil)
-        busca.addWidget(self.btnGoogle)
-        busca.addWidget(self.btnLinkedIn)
-        busca.addWidget(self.btnIndeed)
-        busca.addWidget(self.btnAbrirVaga)
+        busca.addWidget(self.cmbModalidade)
+        busca.addWidget(self.cmbSenioridade)
         layout.addLayout(busca)
-        self.resultados_busca = QTableWidget(0, 5)
-        self.resultados_busca.setHorizontalHeaderLabels(["Vaga", "Empresa", "Localização", "Fonte", "Match"])
+        acoes_busca = QHBoxLayout()
+        for botao in (self.btnBuscar, self.btnBuscarPerfil):
+            acoes_busca.addWidget(botao)
+        acoes_busca.addStretch()
+        layout.addLayout(acoes_busca)
+        fontes_externas = QHBoxLayout()
+        for botao in (self.btnGoogle, self.btnLinkedIn, self.btnIndeed, self.btnAbrirVaga):
+            fontes_externas.addWidget(botao)
+        fontes_externas.addStretch()
+        layout.addLayout(fontes_externas)
+        self.resultados_busca = QTableWidget(0, 7)
+        self.resultados_busca.setHorizontalHeaderLabels(
+            ["Vaga", "Empresa", "Localização", "Fonte", "Ranking", "Decisão", "Match"]
+        )
         self.resultados_busca.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.resultados_busca.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.resultados_busca.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.resultados_busca.setMaximumHeight(190)
         self.resultados_busca.cellDoubleClicked.connect(self.usar_vaga_selecionada)
         layout.addWidget(self.resultados_busca)
+        decisoes = QHBoxLayout()
+        self.btnFavoritar = QPushButton("Favoritar")
+        self.btnDescartar = QPushButton("Descartar")
+        self.btnCandidatura = QPushButton("Criar candidatura")
+        self.btnFavoritar.setProperty("secondary", True)
+        self.btnDescartar.setProperty("danger", True)
+        self.btnFavoritar.clicked.connect(self.favoritar_vaga)
+        self.btnDescartar.clicked.connect(self.descartar_vaga)
+        self.btnCandidatura.clicked.connect(self.converter_em_candidatura)
+        decisoes.addWidget(self.btnFavoritar)
+        decisoes.addWidget(self.btnDescartar)
+        decisoes.addWidget(self.btnCandidatura)
+        decisoes.addStretch()
+        layout.addLayout(decisoes)
         self.btnCompararTodas = QPushButton("Comparar todas as vagas encontradas")
         self.btnCompararTodas.setEnabled(False)
         self.btnCompararTodas.clicked.connect(self.comparar_todas)
         layout.addWidget(self.btnCompararTodas)
         self.btnCancelarLote = QPushButton("Cancelar comparação em lote")
+        self.btnCancelarLote.setProperty("secondary", True)
         self.btnCancelarLote.setEnabled(False)
         self.btnCancelarLote.clicked.connect(self.cancelar_lote)
         layout.addWidget(self.btnCancelarLote)
@@ -135,6 +169,8 @@ class JobMatchPage(QWidget):
         self.btn_curriculo_pdf = QPushButton("Gerar currículo adaptado (PDF)")
         self.btn_curriculo_docx.clicked.connect(self.exportar_curriculo_adaptado_docx)
         self.btn_curriculo_pdf.clicked.connect(self.exportar_curriculo_adaptado_pdf)
+        for botao in (self.btn_docx, self.btn_pdf, self.btn_curriculo_docx, self.btn_curriculo_pdf):
+            botao.setProperty("secondary", True)
         self.btn_docx.setEnabled(False)
         self.btn_pdf.setEnabled(False)
         self.btn_curriculo_docx.setEnabled(False)
@@ -142,10 +178,13 @@ class JobMatchPage(QWidget):
         acoes.addWidget(self.btnComparar)
         acoes.addWidget(self.btn_docx)
         acoes.addWidget(self.btn_pdf)
-        acoes.addWidget(self.btn_curriculo_docx)
-        acoes.addWidget(self.btn_curriculo_pdf)
         acoes.addStretch()
         layout.addLayout(acoes)
+        adaptacao = QHBoxLayout()
+        adaptacao.addWidget(self.btn_curriculo_docx)
+        adaptacao.addWidget(self.btn_curriculo_pdf)
+        adaptacao.addStretch()
+        layout.addLayout(adaptacao)
 
         self.status = QLabel("")
         layout.addWidget(self.status)
@@ -159,7 +198,7 @@ class JobMatchPage(QWidget):
             layout.addWidget(card)
 
         historico_titulo = QLabel("Histórico de comparações")
-        historico_titulo.setStyleSheet("font-size:16px;font-weight:bold;color:#1976D2;margin-top:8px;")
+        historico_titulo.setObjectName("sectionTitle")
         layout.addWidget(historico_titulo)
         self.historico = QTableWidget(0, 3)
         self.historico.setHorizontalHeaderLabels(["Data", "Currículo", "Match"])
@@ -249,7 +288,10 @@ class JobMatchPage(QWidget):
             local = f"{self.txtCidade.text().strip()}, {local}"
         self.status.setText(f"Buscando vagas no Brasil ({local})...")
         self.search_thread = QThread(self)
-        self.search_worker = JobSearchWorker(termo, para_curriculo, self.cmbEstado.currentData(), self.txtCidade.text().strip())
+        self.search_worker = JobSearchWorker(
+            termo, para_curriculo, self.cmbEstado.currentData(), self.txtCidade.text().strip(),
+            self.cmbModalidade.currentData(), self.cmbSenioridade.currentData(),
+        )
         self.search_worker.moveToThread(self.search_thread)
         self.search_thread.started.connect(self.search_worker.run)
         self.search_worker.finished.connect(self.mostrar_vagas_encontradas)
@@ -269,7 +311,9 @@ class JobMatchPage(QWidget):
             self.resultados_busca.setItem(linha, 1, QTableWidgetItem(vaga["empresa"]))
             self.resultados_busca.setItem(linha, 2, QTableWidgetItem(vaga["localizacao"]))
             self.resultados_busca.setItem(linha, 3, QTableWidgetItem(vaga["fonte"]))
-            self.resultados_busca.setItem(linha, 4, QTableWidgetItem("Pendente"))
+            self.resultados_busca.setItem(linha, 4, QTableWidgetItem(f"{vaga.get('rank_score', 0)}%"))
+            self.resultados_busca.setItem(linha, 5, QTableWidgetItem(vaga.get("decision", "nova").title()))
+            self.resultados_busca.setItem(linha, 6, QTableWidgetItem("Pendente"))
         self.btnCompararTodas.setEnabled(bool(vagas))
         if not vagas:
             self.status.setText(
@@ -277,7 +321,49 @@ class JobMatchPage(QWidget):
                 "Use a Central de Carreira para pesquisar LinkedIn, Gupy, Indeed, Catho e Vagas.com no navegador."
             )
         else:
-            self.status.setText("Selecione uma vaga para carregar e comparar.")
+            self.status.setText(
+                f"{len(vagas)} vagas únicas encontradas e ordenadas pelo seu perfil. "
+                "Você pode favoritar, descartar ou criar uma candidatura."
+            )
+
+    def _vaga_selecionada(self):
+        linha = self.resultados_busca.currentRow()
+        if linha < 0 or linha >= len(self.vagas_encontradas):
+            QMessageBox.information(self, "Vagas", "Selecione uma vaga na lista.")
+            return None, -1
+        return self.vagas_encontradas[linha], linha
+
+    def favoritar_vaga(self):
+        vaga, linha = self._vaga_selecionada()
+        if not vaga:
+            return
+        self.db.definir_decisao_vaga(vaga["id"], "favorita")
+        vaga["decision"] = "favorita"
+        self.resultados_busca.setItem(linha, 5, QTableWidgetItem("Favorita"))
+        self.status.setText("Vaga adicionada aos favoritos.")
+
+    def descartar_vaga(self):
+        vaga, linha = self._vaga_selecionada()
+        if not vaga:
+            return
+        self.db.definir_decisao_vaga(vaga["id"], "descartada")
+        self.vagas_encontradas.pop(linha)
+        self.resultados_busca.removeRow(linha)
+        self.status.setText("Vaga descartada. Ela não aparecerá novamente nas próximas buscas.")
+
+    def converter_em_candidatura(self):
+        vaga, linha = self._vaga_selecionada()
+        if not vaga:
+            return
+        candidatura_id = self.db.converter_vaga_em_candidatura(vaga["id"])
+        vaga["decision"] = "candidatura"
+        self.resultados_busca.setItem(linha, 5, QTableWidgetItem("Candidatura"))
+        janela = self.window()
+        if hasattr(janela, "career_hub_page"):
+            janela.career_hub_page.carregar_oportunidades()
+        self.status.setText(
+            f"Candidatura #{candidatura_id} criada. Acompanhe as próximas ações na Central de Carreira."
+        )
 
     def usar_vaga_selecionada(self, linha, _coluna):
         vaga = self.vagas_encontradas[linha]
@@ -354,7 +440,7 @@ class JobMatchPage(QWidget):
         self.batch_thread.start()
 
     def atualizar_progresso_lote(self, indice, total, nota, erro):
-        self.resultados_busca.setItem(indice, 4, QTableWidgetItem(f"{nota}%" if nota >= 0 else "Falhou"))
+        self.resultados_busca.setItem(indice, 6, QTableWidgetItem(f"{nota}%" if nota >= 0 else "Falhou"))
         self.status.setText(f"Comparando {indice + 1} de {total} vagas...")
 
     def finalizar_lote(self, resultados):

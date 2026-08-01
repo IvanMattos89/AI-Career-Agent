@@ -1,19 +1,25 @@
-# AI Career Agent
+# AI Career Agent 3.2
 
-Aplicação desktop para analisar currículos, encontrar vagas brasileiras, comparar aderência e organizar candidaturas.
+Aplicação desktop para analisar currículos, encontrar vagas brasileiras, comparar aderência e organizar candidaturas com privacidade local.
 
-## Estado atual — versão 3.1
+## Recursos
 
-- Importação segura e assíncrona de PDF/DOCX.
-- Análise de currículo com IA opcional e fallback local.
-- Job Match, explicação da nota e histórico persistente.
-- Busca brasileira por cargo, estado e cidade.
-- Currículo direcionado à vaga, exportável em DOCX e PDF sem alterar o original.
-- Central de Carreira com oportunidades, pipeline, entrevista e materiais de candidatura.
+- Importação assíncrona de currículos PDF e DOCX.
+- Análise ATS com Ollama, OpenAI mediante consentimento e fallback local.
+- Currículo ativo explícito para buscas e comparações.
+- Busca unificada em Vagas.com, Remotive, Arbeitnow e boards públicos Greenhouse/Lever.
+- Filtros por cargo, estado, cidade, modalidade e senioridade, com ranking personalizado.
+- Deduplicação entre fontes e decisões persistentes para favoritar ou descartar vagas.
+- Job Match individual ou em lote, com histórico persistente.
+- Currículo direcionado e relatórios em DOCX/PDF.
+- Conversão de uma vaga encontrada em candidatura com um clique.
+- Pipeline com etapas, contatos, salário, prazo, próxima ação e histórico de alterações.
+- Dashboard com taxa de retorno, entrevistas, fonte eficiente e alertas de acompanhamento.
+- Exclusão completa da cópia interna do currículo e dados relacionados.
 
 ## Instalação
 
-Requisitos: Windows 10+, Python 3.11+ e, opcionalmente, Ollama.
+Requisitos: Windows 10 ou superior, Python 3.11+ e, opcionalmente, Ollama.
 
 ```powershell
 git clone https://github.com/IvanMattos89/AI-Career-Agent.git
@@ -25,73 +31,45 @@ pip install -r requirements.txt
 python run.py
 ```
 
-Para testes e ferramentas de desenvolvimento:
-
-```powershell
-pip install -r requirements-dev.txt
-python -m pytest -v
-```
-
-## Uso principal
+## Fluxo recomendado
 
 1. Importe o currículo em **Meu currículo**.
-2. Consulte **Análise IA** para ver a análise salva.
-3. Em **Buscar vagas**, selecione Estado/Cidade e busque vagas para o currículo.
-4. Compare uma vaga e gere o currículo direcionado em Word ou PDF.
-5. Acompanhe as oportunidades na **Central de Carreira**.
+2. Revise a análise em **Análise IA**.
+3. Em **Histórico**, escolha qual currículo será usado como ativo.
+4. Em **Buscar vagas**, selecione estado/cidade e busque para o currículo ativo.
+5. Compare as vagas e gere o currículo direcionado.
+6. Acompanhe as candidaturas na **Central de Carreira**.
 
-## Configuração de IA
+## Provedores configuráveis
 
-Em **Configurações**, escolha Ollama, OpenAI ou modo automático. Caso a IA não responda, a aplicação usa análise local. A Central de Carreira também possui modo local para não bloquear o uso quando não houver provedor disponível.
+Vagas.com, Remotive e Arbeitnow funcionam sem configuração adicional. Para consultar boards
+públicos de empresas que usam Greenhouse ou Lever, informe em **Configurações** os identificadores
+separados por vírgula. Eles também podem ser definidos no `.env`:
+
+```dotenv
+JOB_GREENHOUSE_BOARDS=empresa-a,empresa-b
+JOB_LEVER_SITES=empresa-a,empresa-b
+```
 
 ## Privacidade
 
-- Currículos, análises e histórico são armazenados localmente em `data/`.
-- O conteúdo do currículo não deve ser registrado nos logs.
-- `.env`, banco SQLite, relatórios e currículos importados são ignorados pelo Git.
-- A OpenAI só é usada após autorização explícita em **Configurações**. Sem consentimento, o app usa Ollama local ou análise local.
-- Se o Ollama apontar para outro computador, o envio também exige autorização explícita em **Configurações**.
-- Em **Histórico**, a exclusão de currículo remove análises e comparações relacionadas.
+- Currículos e análises ficam em `data/`, somente no computador do usuário.
+- OpenAI e Ollama remoto exigem consentimento explícito em **Configurações**.
+- Currículos, banco, relatórios, logs e `.env` são ignorados pelo Git.
+- A exclusão de um currículo remove banco, análises, matches e a cópia gerenciada pelo app; o arquivo original permanece intacto.
 
-### Publicação segura do repositório
+## Desenvolvimento
 
-Nunca versionar `data/`, `logs/`, arquivos `.env`, relatórios ou currículos importados. Caso algum desses itens já tenha sido enviado ao repositório remoto, removê-lo da branch atual não basta: o histórico remoto deve ser sanitizado com uma ferramenta como `git filter-repo` e o push forçado deve ser realizado somente por quem administra o repositório.
+```powershell
+pip install -r requirements-dev.txt
+python -m ruff check app tests
+python -m unittest discover -s tests -v
+```
 
-## Arquitetura atual
+O workflow em `.github/workflows/ci.yml` executa lint, compilação e testes no Windows.
 
-- `app/services/`: importação, análise, busca, matching e relatórios.
-- `app/database/`: SQLite, índices e migrações automáticas compatíveis.
-- `app/ui/`: páginas PySide6, widgets e workers em segundo plano.
-- `app/ai/`: provedores, parser, validação e fallback local.
-- `tests/`: testes de parser, interface, fallback, busca e adaptação de currículo.
+## Limitações
 
-## Limitações conhecidas
-
-- LinkedIn, Indeed e Gupy podem exigir login ou credenciais de API; a aplicação abre a pesquisa no navegador quando não há integração pública autorizada.
-- A busca integrada utiliza fontes públicas e pode variar conforme a disponibilidade das plataformas.
-- O currículo direcionado é uma cópia revisável: o usuário deve revisar todos os dados antes de candidatar.
-
-## Histórico de versões
-
-### 3.1
-
-Estabilidade de IA, análise persistida, filtros Brasil, busca na Vagas.com, pipeline, geração de currículo direcionado e importação segura.
-
-### 3.0
-
-Estúdio de candidatura e exportação de materiais.
-
-### 2.0
-
-Central de Carreira, assistente, simulador e plano de ação.
-
-### 1.0
-
-Importação de currículo, análise ATS, Job Match e dashboard.
-
-## Próximos passos
-
-- Conectores estruturados para Greenhouse e Lever.
-- Migrações versionadas e modelos normalizados de vagas.
-- Consentimento explícito antes do envio a provedores externos.
-- Cobertura de testes, lint, CI e empacotamento Windows.
+- Plataformas fechadas podem exigir login e são abertas no navegador.
+- Fontes públicas podem alterar seus formatos e ficar temporariamente indisponíveis.
+- Todo material gerado deve ser revisado antes de uma candidatura.

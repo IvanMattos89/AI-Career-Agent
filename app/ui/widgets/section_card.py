@@ -2,7 +2,15 @@ from html import escape
 
 from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout
 
-from app.ui.themes.style import BORDER, CARD_BACKGROUND, CARD_RADIUS, PRIMARY, TEXT, TEXT_SECONDARY
+from app.ui.themes.style import (
+    BORDER,
+    CARD_BACKGROUND,
+    CARD_RADIUS,
+    PRIMARY,
+    PRIMARY_SOFT,
+    TEXT,
+    TEXT_SECONDARY,
+)
 
 
 class SectionCard(QFrame):
@@ -33,7 +41,7 @@ class SectionCard(QFrame):
             self.lblConteudo.setText("Nenhuma informação identificada")
             return
         chips = " ".join(
-            f'<span style="background:#EAF3FF; color:{PRIMARY}; padding:5px 8px; border-radius:8px;">{escape(item)}</span>'
+            f'<span style="background:{PRIMARY_SOFT}; color:{PRIMARY}; padding:5px 8px; border-radius:8px;">{escape(item)}</span>'
             for item in itens
         )
         self.lblConteudo.setText(chips)

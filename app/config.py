@@ -3,7 +3,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 APP_NAME = "AI Career Agent"
-APP_VERSION = "3.1.0"
+APP_VERSION = "3.2.0"
 
 DATA_DIR = BASE_DIR / "data"
 DATABASE = DATA_DIR / "ai_career_agent.db"

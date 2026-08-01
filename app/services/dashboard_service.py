@@ -23,6 +23,7 @@ class DashboardService:
             data = "-"
 
         match_metricas = self.db.dashboard_job_match_metricas()
+        candidaturas = self.db.metricas_candidaturas()
         return {
 
             "ats": self.db.dashboard_media_ats(),
@@ -34,6 +35,10 @@ class DashboardService:
             "cargo": cargo,
             "job_matches": match_metricas["total"],
             "match_medio": match_metricas["media"],
+            "candidaturas": candidaturas["total"],
+            "taxa_entrevistas": candidaturas["entrevistas"],
+            "acompanhamentos": candidaturas["acompanhamentos"],
+            "melhor_fonte": candidaturas["melhor_fonte"],
         }
 
 

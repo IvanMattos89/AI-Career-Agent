@@ -13,16 +13,11 @@ class DashboardPage(QWidget):
         self.service = DashboardService()
 
         self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(20,20,20,20)
-        self.layout.setSpacing(20)
+        self.layout.setContentsMargins(28,24,28,24)
+        self.layout.setSpacing(18)
 
         titulo = QLabel("Dashboard")
-        titulo.setStyleSheet("""
-            font-size:28px;
-            font-weight:bold;
-            color:#1976D2;
-            padding:5px;
-        """)
+        titulo.setObjectName("pageTitle")
 
         self.layout.addWidget(titulo)
 
@@ -32,11 +27,19 @@ class DashboardPage(QWidget):
         self.cardCurriculos = InfoCard("Currículos", "0")
         self.cardVagas = InfoCard("Job Matches", "0")
         self.cardUltima = InfoCard("Último Cargo", "-")
+        self.cardCandidaturas = InfoCard("Candidaturas", "0")
+        self.cardEntrevistas = InfoCard("Taxa de entrevistas", "0%")
+        self.cardAcompanhamentos = InfoCard("Ações pendentes", "0")
+        self.cardFonte = InfoCard("Fonte eficiente", "-")
 
         grid.addWidget(self.cardATS,0,0)
         grid.addWidget(self.cardCurriculos,0,1)
         grid.addWidget(self.cardVagas,0,2)
         grid.addWidget(self.cardUltima,0,3)
+        grid.addWidget(self.cardCandidaturas,1,0)
+        grid.addWidget(self.cardEntrevistas,1,1)
+        grid.addWidget(self.cardAcompanhamentos,1,2)
+        grid.addWidget(self.cardFonte,1,3)
 
         for i in range(4):
             grid.setColumnStretch(i,1)
@@ -44,12 +47,7 @@ class DashboardPage(QWidget):
         self.layout.addLayout(grid)
 
         tituloHistorico = QLabel("Últimas análises")
-        tituloHistorico.setStyleSheet("""
-            font-size:18px;
-            font-weight:bold;
-            color:#1976D2;
-            margin-top:15px;
-        """)
+        tituloHistorico.setObjectName("sectionTitle")
 
         self.layout.addWidget(tituloHistorico)
 
@@ -69,6 +67,10 @@ class DashboardPage(QWidget):
         self.cardCurriculos.setValue(str(dados["curriculos"]))
         self.cardVagas.setValue(f'{dados["job_matches"]} ({dados["match_medio"]}%)')
         self.cardUltima.setValue(dados["cargo"])
+        self.cardCandidaturas.setValue(str(dados["candidaturas"]))
+        self.cardEntrevistas.setValue(f'{dados["taxa_entrevistas"]}%')
+        self.cardAcompanhamentos.setValue(str(dados["acompanhamentos"]))
+        self.cardFonte.setValue(dados["melhor_fonte"])
 
         self.carregar_historico()
 

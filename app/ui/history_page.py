@@ -22,13 +22,11 @@ class HistoryPage(QWidget):
         self.service = HistoryService()
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(14)
 
         titulo = QLabel("Histórico de Currículos")
-        titulo.setStyleSheet("""
-            font-size:18px;
-            font-weight:bold;
-            padding:10px;
-        """)
+        titulo.setObjectName("pageTitle")
 
         layout.addWidget(titulo)
 
@@ -38,6 +36,9 @@ class HistoryPage(QWidget):
         self.btn_abrir = QPushButton("📄 Abrir")
         self.btn_ativar = QPushButton("✓ Usar como ativo")
         self.btn_excluir = QPushButton("🗑 Excluir")
+        for botao in (self.btn_atualizar, self.btn_abrir, self.btn_ativar):
+            botao.setProperty("secondary", True)
+        self.btn_excluir.setProperty("danger", True)
 
         barra.addWidget(self.btn_atualizar)
         barra.addWidget(self.btn_abrir)

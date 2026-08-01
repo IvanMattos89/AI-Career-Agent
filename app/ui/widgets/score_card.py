@@ -40,14 +40,15 @@ class ScoreCard(QFrame):
         }}
 
         QProgressBar {{
-            border:1px solid #CCCCCC;
-            border-radius:8px;
-            height:24px;
-            text-align:center;
+            border:none;
+            border-radius:6px;
+            min-height:12px;
+            max-height:12px;
+            background:#E2E8F0;
         }}
 
         QProgressBar::chunk {{
-            border-radius:7px;
+            border-radius:6px;
             background:{PRIMARY};
         }}
         """)
@@ -104,14 +105,15 @@ class ScoreCard(QFrame):
 
         self.progress.setStyleSheet(f"""
         QProgressBar {{
-            border:1px solid #CCCCCC;
-            border-radius:8px;
-            height:24px;
-            text-align:center;
+            border:none;
+            border-radius:6px;
+            min-height:12px;
+            max-height:12px;
+            background:#E2E8F0;
         }}
 
         QProgressBar::chunk {{
-            border-radius:7px;
+            border-radius:6px;
             background:{cor};
         }}
         """)

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from dotenv import set_key
@@ -40,10 +41,11 @@ class SettingsPage(QWidget):
         layout.setSpacing(16)
 
         titulo = QLabel("Configurações")
-        titulo.setStyleSheet("font-size:28px;font-weight:bold;color:#1976D2;")
+        titulo.setObjectName("pageTitle")
         layout.addWidget(titulo)
         descricao = QLabel("Ajuste a integração de IA e consulte o estado dos dados locais. Alterações de IA são aplicadas no próximo reinício.")
         descricao.setWordWrap(True)
+        descricao.setObjectName("pageSubtitle")
         layout.addWidget(descricao)
 
         grupo_ia = QGroupBox("Inteligência artificial")
@@ -78,6 +80,7 @@ class SettingsPage(QWidget):
         self.btn_salvar = QPushButton("Salvar configurações")
         self.btn_salvar.clicked.connect(self.salvar)
         self.btn_testar = QPushButton("Testar conexão Ollama")
+        self.btn_testar.setProperty("secondary", True)
         self.btn_testar.clicked.connect(self.testar_ollama)
         self.lbl_ollama = QLabel("Status: ainda não testado")
         acoes_ia.addWidget(self.btn_salvar)
@@ -86,6 +89,18 @@ class SettingsPage(QWidget):
         acoes_ia.addStretch()
         layout.addLayout(acoes_ia)
 
+        grupo_fontes = QGroupBox("Provedores públicos de vagas")
+        form_fontes = QFormLayout(grupo_fontes)
+        self.greenhouse_boards = QLineEdit(os.getenv("JOB_GREENHOUSE_BOARDS", ""))
+        self.greenhouse_boards.setPlaceholderText("Ex.: empresa-a,empresa-b")
+        self.greenhouse_boards.setToolTip("Identificadores de boards públicos Greenhouse separados por vírgula.")
+        self.lever_sites = QLineEdit(os.getenv("JOB_LEVER_SITES", ""))
+        self.lever_sites.setPlaceholderText("Ex.: empresa-a,empresa-b")
+        self.lever_sites.setToolTip("Identificadores de sites públicos Lever separados por vírgula.")
+        form_fontes.addRow("Boards Greenhouse", self.greenhouse_boards)
+        form_fontes.addRow("Sites Lever", self.lever_sites)
+        layout.addWidget(grupo_fontes)
+
         grupo_dados = QGroupBox("Dados e recursos locais")
         form_dados = QFormLayout(grupo_dados)
         self.lbl_curriculos = QLabel()
@@ -93,7 +108,10 @@ class SettingsPage(QWidget):
         self.lbl_oportunidades = QLabel()
         self.lbl_banco = QLabel(str(DATABASE.resolve()))
         self.lbl_relatorios = QLabel(str(REPORTS_DIR.resolve()))
-        self.lbl_fontes = QLabel("Remotive e Arbeitnow (fontes públicas); vagas manuais também são suportadas.")
+        self.lbl_fontes = QLabel(
+            "Vagas.com, Remotive, Arbeitnow, Greenhouse e Lever. Greenhouse e Lever usam os "
+            "identificadores públicos configurados acima."
+        )
         self.lbl_fontes.setWordWrap(True)
         form_dados.addRow("Currículos importados", self.lbl_curriculos)
         form_dados.addRow("Job Matches salvos", self.lbl_matches)
@@ -129,8 +147,14 @@ class SettingsPage(QWidget):
             "OPENAI_MODEL": self.openai_model.text().strip(),
             "OPENAI_DATA_CONSENT": "true" if self.openai_consent.isChecked() else "false",
             "OLLAMA_EXTERNAL_CONSENT": "true" if self.ollama_external_consent.isChecked() else "false",
+            "JOB_GREENHOUSE_BOARDS": self.greenhouse_boards.text().strip(),
+            "JOB_LEVER_SITES": self.lever_sites.text().strip(),
         }
-        if not all(valores.values()) or not valores["OLLAMA_TIMEOUT"].isdigit() or int(valores["OLLAMA_TIMEOUT"]) < 5:
+        campos_ia = [
+            valores["AI_PROVIDER"], valores["OLLAMA_URL"], valores["OLLAMA_MODEL"],
+            valores["OLLAMA_TIMEOUT"], valores["OPENAI_MODEL"],
+        ]
+        if not all(campos_ia) or not valores["OLLAMA_TIMEOUT"].isdigit() or int(valores["OLLAMA_TIMEOUT"]) < 5:
             QMessageBox.warning(self, "Configurações", "Preencha todos os campos de IA antes de salvar.")
             return
         for chave, valor in valores.items():

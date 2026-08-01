@@ -30,22 +30,16 @@ class AnalysisPage(QWidget):
     def _criar_interface(self):
 
         layout_principal = QVBoxLayout(self)
-        layout_principal.setContentsMargins(20,20,20,20)
+        layout_principal.setContentsMargins(28,24,28,24)
+        layout_principal.setSpacing(8)
 
         titulo = QLabel("Análise inteligente do currículo")
-        titulo.setStyleSheet("""
-            QLabel{
-                font-size:28px;
-                font-weight:bold;
-                color:#1976D2;
-                padding:8px;
-            }
-        """)
+        titulo.setObjectName("pageTitle")
 
         layout_principal.addWidget(titulo)
 
         subtitulo = QLabel("Veja os pontos fortes do perfil e os próximos ajustes recomendados para aumentar a aderência às vagas.")
-        subtitulo.setStyleSheet("color:#667085;font-size:13px;padding:0 8px 8px;")
+        subtitulo.setObjectName("pageSubtitle")
         layout_principal.addWidget(subtitulo)
 
         scroll = QScrollArea()
