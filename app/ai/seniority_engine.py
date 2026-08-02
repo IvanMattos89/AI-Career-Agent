@@ -24,27 +24,8 @@ def estimate(texto: str) -> str:
         elif maior_tempo >= 2:
             score += 15
 
-    # Empresas de grande porte
-    grandes = [
-        "cpfl",
-        "deloitte",
-        "ey",
-        "kpmg",
-        "pwc",
-        "ambev",
-        "nestle",
-        "petrobras",
-        "vale",
-        "ibm",
-        "bosch",
-        "siemens"
-    ]
-
-    for empresa in grandes:
-        if empresa in texto:
-            score += 5
-
-    # Tecnologias
+    # Tecnologias indicam complexidade, mas nunca substituem tempo,
+    # autonomia ou responsabilidade comprovada.
     tecnologias = [
         "sap",
         "s/4hana",
@@ -58,7 +39,7 @@ def estimate(texto: str) -> str:
 
     for tecnologia in tecnologias:
         if tecnologia in texto:
-            score += 3
+            score += 1
 
     # Responsabilidades
     palavras = [
@@ -73,7 +54,7 @@ def estimate(texto: str) -> str:
 
     for palavra in palavras:
         if palavra in texto:
-            score += 4
+            score += 5
 
     if score >= 45:
         return "Sênior"

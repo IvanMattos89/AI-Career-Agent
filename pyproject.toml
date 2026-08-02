@@ -1,6 +1,6 @@
 [project]
 name = "ai-career-agent"
-version = "3.2.0"
+version = "3.4.0"
 description = "Assistente desktop para análise de currículo, busca de vagas e gestão de carreira."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -35,3 +35,9 @@ python_version = "3.11"
 files = ["app"]
 ignore_missing_imports = true
 follow_imports = "skip"
+check_untyped_defs = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["app.ui.*", "app.dashboard.*"]
+disable_error_code = ["attr-defined", "method-assign", "union-attr"]

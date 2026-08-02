@@ -29,3 +29,13 @@ class AIPrivacyTest(unittest.TestCase):
         with patch.object(AIConfig, "OLLAMA_URL", "https://ollama.example.com"), patch.object(AIConfig, "OLLAMA_EXTERNAL_CONSENT", False), patch("app.ai.llm_client.requests.get") as get:
             self.assertFalse(client._ollama_disponivel())
         get.assert_not_called()
+
+    def test_long_prompt_keeps_beginning_and_final_rules(self):
+        prompt = "REGRAS_INICIAIS\n" + ("x" * 30000) + "\nREGRAS_FINAIS"
+
+        with patch.object(AIConfig, "OLLAMA_MAX_PROMPT_CHARS", 12000):
+            compact = LLMClient._compact_prompt(prompt)
+
+        self.assertLessEqual(len(compact), 12100)
+        self.assertIn("REGRAS_INICIAIS", compact)
+        self.assertIn("REGRAS_FINAIS", compact)

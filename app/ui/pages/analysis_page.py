@@ -65,7 +65,7 @@ class AnalysisPage(QWidget):
 
     def _criar_score(self):
 
-        self.score = ScoreCard()
+        self.score = ScoreCard("QUALIDADE ATS ESTIMADA")
 
         self.layout.addWidget(self.score)
 
@@ -174,6 +174,14 @@ class AnalysisPage(QWidget):
         """Reabre a última análise persistida ao entrar nesta tela."""
         registro = self.db.obter_analise_ativa()
         if not registro:
+            self.mostrar_analise(SimpleNamespace(
+                ats_score=0, cargo="Nenhum currículo analisado", area="-",
+                senioridade="-", anos_experiencia=0, confianca=None,
+                hard_skills=[], soft_skills=[], tecnologias=[], idiomas=[],
+                certificacoes=[], palavras_chave=[], pontos_fortes=[], pontos_melhoria=[],
+                competencias_faltantes=[], recomendacoes=[],
+                resumo="Importe e analise um currículo para preencher este painel.",
+            ))
             return False
         habilidades = self._lista(registro["hard_skills"])
         analise = SimpleNamespace(
@@ -182,7 +190,9 @@ class AnalysisPage(QWidget):
             area=registro["area"] or "Não identificada",
             senioridade=registro["senioridade"] or "Em análise",
             anos_experiencia=registro["anos_experiencia"] or 0,
-            confianca=None,
+            confianca=(
+                registro["confianca"] if "confianca" in registro.keys() else None
+            ),
             hard_skills=habilidades,
             soft_skills=self._lista(registro["soft_skills"]),
             tecnologias=self._lista(registro["tecnologias"]),

@@ -1,6 +1,31 @@
-"""Workers para manter chamadas potencialmente lentas fora da thread da interface."""
+"""Workers e ciclo de vida de tarefas executadas fora da thread da interface."""
+
+from collections.abc import Iterable
+from typing import Any
 
 from PySide6.QtCore import QObject, Signal, Slot
+
+from app.ai.logging_config import logger
+
+
+def shutdown_threads(threads: Iterable[Any], timeout_ms: int = 3000) -> None:
+    """Encerra threads de interface sem deixá-las serem destruídas em execução.
+
+    ``quit`` é cooperativo e não interrompe uma requisição bloqueante já iniciada.
+    Nunca usamos ``terminate`` porque a thread pode estar gravando no SQLite.
+    """
+    active = [thread for thread in threads if thread is not None and thread.isRunning()]
+    for thread in active:
+        thread.requestInterruption()
+        thread.quit()
+
+    for thread in active:
+        if thread.wait(timeout_ms):
+            continue
+        logger.warning(
+            "Thread ainda ativa após %sms; aguardando encerramento seguro", timeout_ms
+        )
+        thread.wait()
 
 
 class JobMatchWorker(QObject):
@@ -14,12 +39,17 @@ class JobMatchWorker(QObject):
 
     @Slot()
     def run(self):
+        service: Any = None
         try:
             # O serviço (e a conexão SQLite) é criado dentro da thread correta.
             from app.services.job_match_service import JobMatchService
-            self.finished.emit(JobMatchService().comparar(self.descricao, self.titulo))
+            service = JobMatchService()
+            self.finished.emit(service.comparar(self.descricao, self.titulo))
         except Exception as erro:
             self.failed.emit(str(erro))
+        finally:
+            if service is not None:
+                service.db.close()
 
 
 class JobSearchWorker(QObject):
@@ -40,6 +70,7 @@ class JobSearchWorker(QObject):
 
     @Slot()
     def run(self):
+        service = None
         try:
             from app.services.job_search_service import JobSearchService
             service = JobSearchService()
@@ -56,6 +87,9 @@ class JobSearchWorker(QObject):
                 ))
         except Exception as erro:
             self.failed.emit(str(erro))
+        finally:
+            if service is not None:
+                service.db.close()
 
 
 class JobBatchMatchWorker(QObject):
@@ -69,6 +103,7 @@ class JobBatchMatchWorker(QObject):
 
     @Slot()
     def run(self):
+        service = None
         try:
             from app.services.job_match_service import JobMatchService
             service = JobMatchService()
@@ -86,14 +121,18 @@ class JobBatchMatchWorker(QObject):
             self.finished.emit(resultados)
         except Exception as erro:
             self.failed.emit(str(erro))
+        finally:
+            if service is not None:
+                service.db.close()
 
 
 class OllamaStatusWorker(QObject):
     finished = Signal(bool, str)
 
-    def __init__(self, url):
+    def __init__(self, url, model=""):
         super().__init__()
         self.url = url.rstrip("/")
+        self.model = model.strip()
 
     @Slot()
     def run(self):
@@ -101,7 +140,17 @@ class OllamaStatusWorker(QObject):
             import requests
             response = requests.get(f"{self.url}/api/tags", timeout=5)
             response.raise_for_status()
-            self.finished.emit(True, "Ollama disponível")
+            models = {
+                str(item.get("name") or item.get("model") or "").strip()
+                for item in response.json().get("models", [])
+            }
+            if self.model and self.model not in models:
+                self.finished.emit(
+                    False,
+                    f"Ollama disponível, mas o modelo '{self.model}' não está instalado.",
+                )
+            else:
+                self.finished.emit(True, f"Ollama disponível · modelo {self.model or 'detectado'}")
         except Exception as erro:
             self.finished.emit(False, f"Ollama indisponível: {erro}")
 
@@ -117,11 +166,16 @@ class ResumeAnalysisWorker(QObject):
 
     @Slot()
     def run(self):
+        service = None
         try:
             from app.services.analysis_service import AnalysisService
-            self.finished.emit(AnalysisService().analisar_texto(self.resume_id, self.texto))
+            service = AnalysisService()
+            self.finished.emit(service.analisar_texto(self.resume_id, self.texto))
         except Exception as erro:
             self.failed.emit(str(erro))
+        finally:
+            if service is not None:
+                service.db.close()
 
 
 class ResumeImportWorker(QObject):
@@ -135,9 +189,11 @@ class ResumeImportWorker(QObject):
 
     @Slot()
     def run(self):
+        service = None
         try:
             from app.services.resume_service import ResumeService
-            resultado = ResumeService().importar(self.arquivo)
+            service = ResumeService()
+            resultado = service.importar(self.arquivo)
             self.finished.emit(resultado.resume_id, str(resultado.destination), resultado.text)
         except (FileNotFoundError, PermissionError, ValueError, OSError) as erro:
             self.failed.emit(str(erro))
@@ -145,6 +201,9 @@ class ResumeImportWorker(QObject):
             from app.ai.logging_config import logger
             logger.exception("Falha inesperada durante a importação de currículo")
             self.failed.emit("Não foi possível importar o currículo. Consulte o log para mais detalhes.")
+        finally:
+            if service is not None:
+                service.db.close()
 
 
 class CareerWorker(QObject):
@@ -158,6 +217,7 @@ class CareerWorker(QObject):
 
     @Slot()
     def run(self):
+        service: Any = None
         try:
             if self.operacao == "gerar_pacote":
                 from app.services.application_studio_service import ApplicationStudioService
@@ -168,3 +228,6 @@ class CareerWorker(QObject):
             self.finished.emit(getattr(service, self.operacao)(*self.args))
         except Exception as erro:
             self.failed.emit(str(erro))
+        finally:
+            if service is not None:
+                service.db.close()

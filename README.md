@@ -1,4 +1,4 @@
-# AI Career Agent 3.2
+# AI Career Agent 3.4
 
 Aplicação desktop para analisar currículos, encontrar vagas brasileiras, comparar aderência e organizar candidaturas com privacidade local.
 
@@ -11,7 +11,7 @@ Aplicação desktop para analisar currículos, encontrar vagas brasileiras, comp
 - Filtros por cargo, estado, cidade, modalidade e senioridade, com ranking personalizado.
 - Deduplicação entre fontes e decisões persistentes para favoritar ou descartar vagas.
 - Job Match individual ou em lote, com histórico persistente.
-- Currículo direcionado e relatórios em DOCX/PDF.
+- Currículo direcionado com prévia editável, matriz requisito × evidência e exportação ATS em DOCX/PDF.
 - Conversão de uma vaga encontrada em candidatura com um clique.
 - Pipeline com etapas, contatos, salário, prazo, próxima ação e histórico de alterações.
 - Dashboard com taxa de retorno, entrevistas, fonte eficiente e alertas de acompanhamento.
@@ -38,8 +38,9 @@ python run.py
 2. Revise a análise em **Análise IA**.
 3. Em **Histórico**, escolha qual currículo será usado como ativo.
 4. Em **Buscar vagas**, selecione estado/cidade e busque para o currículo ativo.
-5. Compare as vagas e gere o currículo direcionado.
-6. Acompanhe as candidaturas na **Central de Carreira**.
+5. Compare as vagas e abra a prévia do currículo direcionado.
+6. Revise a matriz de evidências e edite o conteúdo antes de salvar em Word ou PDF.
+7. Acompanhe as candidaturas na **Central de Carreira**.
 
 ## Provedores configuráveis
 
@@ -91,3 +92,17 @@ O workflow em `.github/workflows/ci.yml` executa lint, compilação e testes no 
 - Plataformas fechadas podem exigir login e são abertas no navegador.
 - Fontes públicas podem alterar seus formatos e ficar temporariamente indisponíveis.
 - Todo material gerado deve ser revisado antes de uma candidatura.
+- O gerador nunca adiciona automaticamente um requisito sem evidência no currículo importado.
+- O modelo de currículo prioriza leitura ATS: A4, uma coluna, fonte legível e sem elementos gráficos.
+
+## Executável Windows
+
+Após instalar as dependências de desenvolvimento, execute:
+
+```powershell
+.\scripts\build_windows.ps1
+```
+
+O executável é criado em `dist/AI-Career-Agent.exe`. Na versão empacotada, banco, currículos,
+relatórios e logs são armazenados em `%LOCALAPPDATA%\AI Career Agent`, evitando gravações em
+`Program Files`. Assinatura digital e instalador devem ser aplicados antes da distribuição pública.

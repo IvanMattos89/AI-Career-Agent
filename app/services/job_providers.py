@@ -71,7 +71,7 @@ class VagasComProvider(JobProvider):
         response = requests.get(
             self.url.format(self._slug(query)),
             timeout=20,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; AI-Career-Agent/3.2)"},
+            headers={"User-Agent": "Mozilla/5.0 (compatible; AI-Career-Agent/3.3)"},
         )
         response.raise_for_status()
         page = BeautifulSoup(response.text, "html.parser")
@@ -364,9 +364,11 @@ class JoobleProvider(JobProvider):
 
 
 def default_providers() -> list[JobProvider]:
-    providers: list[JobProvider] = [
-        VagasComProvider(), RemotiveProvider(), GreenhouseProvider(), LeverProvider()
-    ]
+    providers: list[JobProvider] = [VagasComProvider(), RemotiveProvider()]
+    if os.getenv("JOB_GREENHOUSE_BOARDS", "").strip():
+        providers.append(GreenhouseProvider())
+    if os.getenv("JOB_LEVER_SITES", "").strip():
+        providers.append(LeverProvider())
     if os.getenv("GUPY_API_TOKEN", "").strip():
         providers.append(GupyProvider())
     if os.getenv("ADZUNA_APP_ID", "").strip() and os.getenv("ADZUNA_APP_KEY", "").strip():

@@ -2,6 +2,8 @@ import json
 
 from app.ai.llm_client import LLMClient
 from app.database.sqlite_db import Database
+from app.services.resume_adaptation_service import ResumeAdaptationService
+from app.services.resume_structure_service import ResumeStructureService
 
 
 class ApplicationStudioService:
@@ -18,6 +20,21 @@ class ApplicationStudioService:
             raise ValueError("Oportunidade não encontrada.")
         if not analise:
             raise ValueError("Analise um currículo antes de criar material de candidatura.")
+        resume = self.db.obter_curriculo(analise["resume_id"])
+        resume_text = resume["texto"] if resume else ""
+        try:
+            structure = json.loads(resume["structured_json"] or "{}") if resume else {}
+        except (TypeError, json.JSONDecodeError):
+            structure = {}
+        if not structure.get("sections"):
+            structure = ResumeStructureService.from_text(resume_text)
+        evidence = ResumeAdaptationService._evidence_matrix(
+            vaga["descricao"] or vaga["titulo"], structure
+        )
+        proven = [item for item in evidence if item["status"] == "Comprovado"]
+        evidence_text = "\n".join(
+            f"- {item['requisito']}: {item['evidencia']}" for item in proven
+        ) or "Nenhum requisito específico comprovado."
         pacote = None
         if self.llm.disponivel():
             prompt = """Você é especialista em candidatura profissional. Crie material em português usando SOMENTE os dados abaixo; não invente experiências, resultados ou competências.
@@ -30,6 +47,8 @@ Senioridade: {senioridade}
 Hard skills: {skills}
 Tecnologias: {tecnologias}
 Resumo: {resumo}
+Evidências verificadas no currículo:
+{evidencias}
 
 VAGA
 Título: {titulo}
@@ -38,10 +57,23 @@ Descrição: {descricao}""".format(
                 cargo=analise["cargo"] or "", area=analise["area"] or "",
                 senioridade=analise["senioridade"] or "", skills=analise["hard_skills"] or "",
                 tecnologias=analise["tecnologias"] or "", resumo=analise["resumo"] or "",
+                evidencias=evidence_text,
                 titulo=vaga["titulo"], empresa=vaga["empresa"] or "", descricao=vaga["descricao"] or "",
             )
             try:
                 pacote = json.loads(self.llm.perguntar(prompt, timeout=20))
+                generated = " ".join((
+                    str(pacote.get("carta", "")),
+                    str(pacote.get("resumo_direcionado", "")),
+                    " ".join(map(str, pacote.get("palavras_chave", []))),
+                ))
+                invented = [
+                    term for term in ResumeAdaptationService.MARKET_TERMS
+                    if ResumeAdaptationService._contains(term, generated)
+                    and not ResumeAdaptationService._contains(term, resume_text)
+                ]
+                if invented:
+                    pacote = None
             except (Exception,):
                 pacote = None
         if not pacote:
@@ -61,6 +93,7 @@ Descrição: {descricao}""".format(
             "checklist": [str(x) for x in pacote.get("checklist", []) if str(x).strip()],
             "vaga": vaga["titulo"], "empresa": vaga["empresa"] or "",
             "resume_id": analise["resume_id"],
+            "matriz_evidencias": evidence,
         }
         pacote["id"] = self.db.salvar_pacote_candidatura(oportunidade_id, pacote)
         return pacote

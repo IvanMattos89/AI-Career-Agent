@@ -19,12 +19,16 @@ class ActiveResumeDatabaseTest(unittest.TestCase):
             with patch("app.database.sqlite_db.DATABASE", banco), patch("app.database.sqlite_db.DATA_DIR", raiz), patch("app.database.sqlite_db.RESUMES_DIR", curriculos):
                 db = Database()
                 primeiro = db.salvar_curriculo("primeiro.docx", str(arquivo), "Analista Fiscal com ICMS")
-                db.salvar_analise(primeiro, cargo="Analista Fiscal", area="Fiscal", senioridade="Pleno", ats_score=80)
+                db.salvar_analise(
+                    primeiro, cargo="Analista Fiscal", area="Fiscal", senioridade="Pleno",
+                    confianca=0.85, ats_score=80,
+                )
                 segundo = db.salvar_curriculo("segundo.docx", str(curriculos / "segundo.docx"), "Analista de Dados com SQL")
                 db.salvar_analise(segundo, cargo="Analista de Dados", area="Dados", senioridade="Pleno", ats_score=80)
 
                 db.definir_curriculo_ativo(primeiro)
                 self.assertEqual(db.obter_analise_ativa()["resume_id"], primeiro)
+                self.assertEqual(db.obter_analise_ativa()["confianca"], 0.85)
                 self.assertTrue(db.excluir_curriculo(primeiro))
                 self.assertFalse(arquivo.exists())
                 self.assertEqual(db.obter_curriculo_ativo_id(), segundo)

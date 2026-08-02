@@ -70,6 +70,18 @@ class JobPipelineTest(unittest.TestCase):
         self.db.definir_decisao_vaga(result[0]["id"], "descartada")
         self.assertEqual(service.buscar("Analista Fiscal", estado="SP"), [])
 
+    def test_deduplicates_common_company_title_and_location_variations(self):
+        first = JobListing(
+            title="Analista Fiscal Sr.", company="Empresa X Ltda.",
+            location="São Paulo/SP, Brasil",
+        )
+        second = JobListing(
+            title="Analista Fiscal Sênior", company="Empresa X",
+            location="São Paulo - SP",
+        )
+
+        self.assertEqual(first.canonical_key, second.canonical_key)
+
     def test_discarded_results_do_not_reduce_requested_limit(self):
         jobs = [
             JobListing(

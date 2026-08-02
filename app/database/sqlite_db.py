@@ -10,7 +10,7 @@ class Database:
 
     def __init__(self):
         self.data_dir = DATA_DIR
-        self.data_dir.mkdir(exist_ok=True)
+        self.data_dir.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(DATABASE, timeout=15)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
@@ -22,7 +22,7 @@ class Database:
         """Fecha a conexão SQLite de forma segura quando o serviço é descartado."""
         if getattr(self, "conn", None) is not None:
             self.conn.close()
-            self.conn = None
+            self.conn = None  # type: ignore[assignment]
 
     def diagnostico(self):
         """Retorna informações seguras para a tela de diagnóstico local."""
@@ -30,8 +30,10 @@ class Database:
         version = self.conn.execute(
             "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"
         ).fetchone()[0]
+        foreign_key_violations = len(self.conn.execute("PRAGMA foreign_key_check").fetchall())
         return {
             "integridade": integrity,
+            "violacoes_fk": foreign_key_violations,
             "migracao": int(version or 0),
             "tamanho_bytes": DATABASE.stat().st_size if DATABASE.exists() else 0,
         }
@@ -100,6 +102,7 @@ class Database:
             cargo TEXT,
             area TEXT,
             senioridade TEXT,
+            confianca REAL,
 
             hard_skills TEXT,
             soft_skills TEXT,
@@ -294,6 +297,24 @@ class Database:
                 "INSERT INTO schema_migrations(version, name) VALUES(2, ?)",
                 ("privacidade_derivados_e_metricas_provedores",),
             )
+        if 3 not in aplicadas:
+            self._migracao_curriculo_estruturado(cursor)
+            cursor.execute(
+                "INSERT INTO schema_migrations(version, name) VALUES(3, ?)",
+                ("curriculo_estruturado",),
+            )
+        if 4 not in aplicadas:
+            self._migracao_integridade_e_confianca(cursor)
+            cursor.execute(
+                "INSERT INTO schema_migrations(version, name) VALUES(4, ?)",
+                ("integridade_relacional_e_confianca",),
+            )
+        if 5 not in aplicadas:
+            self._migracao_chaves_normalizadas(cursor)
+            cursor.execute(
+                "INSERT INTO schema_migrations(version, name) VALUES(5, ?)",
+                ("chaves_de_vagas_normalizadas",),
+            )
 
     @staticmethod
     def _migracao_busca_e_pipeline(cursor):
@@ -408,16 +429,115 @@ class Database:
             "ON provider_search_metrics(provider, created_at)"
         )
 
+    @staticmethod
+    def _migracao_curriculo_estruturado(cursor):
+        existing = {row[1] for row in cursor.execute("PRAGMA table_info(resumes)")}
+        for name, definition in {
+            "structured_json": "TEXT NOT NULL DEFAULT '{}'",
+            "source_format": "TEXT",
+        }.items():
+            if name not in existing:
+                cursor.execute(f"ALTER TABLE resumes ADD COLUMN {name} {definition}")
+
+    @staticmethod
+    def _migracao_integridade_e_confianca(cursor):
+        analysis_columns = {
+            row[1] for row in cursor.execute("PRAGMA table_info(resume_analysis)")
+        }
+        if "confianca" not in analysis_columns:
+            cursor.execute("ALTER TABLE resume_analysis ADD COLUMN confianca REAL")
+
+        # Repara resíduos de instalações antigas antes de reforçar os vínculos.
+        cursor.execute(
+            "DELETE FROM resume_analysis WHERE resume_id NOT IN (SELECT id FROM resumes)"
+        )
+        cursor.execute(
+            "DELETE FROM job_matches WHERE resume_id NOT IN (SELECT id FROM resumes) "
+            "OR job_id NOT IN (SELECT id FROM jobs)"
+        )
+        cursor.execute(
+            "DELETE FROM application_history WHERE opportunity_id NOT IN "
+            "(SELECT id FROM opportunities)"
+        )
+        cursor.execute(
+            "DELETE FROM application_packages WHERE opportunity_id NOT IN "
+            "(SELECT id FROM opportunities) OR (resume_id IS NOT NULL AND resume_id NOT IN "
+            "(SELECT id FROM resumes))"
+        )
+        cursor.execute(
+            "DELETE FROM opportunities WHERE resume_id IS NOT NULL "
+            "AND resume_id NOT IN (SELECT id FROM resumes)"
+        )
+        cursor.execute(
+            "DELETE FROM job_search_results WHERE search_id NOT IN (SELECT id FROM job_searches) "
+            "OR listing_id NOT IN (SELECT id FROM job_listings)"
+        )
+        cursor.execute(
+            "DELETE FROM provider_search_metrics WHERE search_id IS NOT NULL "
+            "AND search_id NOT IN (SELECT id FROM job_searches)"
+        )
+        cursor.executescript("""
+            CREATE INDEX IF NOT EXISTS idx_resume_analysis_resume_created
+                ON resume_analysis(resume_id, created_at DESC, id DESC);
+            CREATE INDEX IF NOT EXISTS idx_job_matches_resume_created
+                ON job_matches(resume_id, created_at DESC, id DESC);
+            CREATE TRIGGER IF NOT EXISTS opportunities_resume_fk_insert
+            BEFORE INSERT ON opportunities
+            WHEN NEW.resume_id IS NOT NULL
+                 AND NOT EXISTS (SELECT 1 FROM resumes WHERE id=NEW.resume_id)
+            BEGIN SELECT RAISE(ABORT, 'curriculo inexistente'); END;
+            CREATE TRIGGER IF NOT EXISTS opportunities_resume_fk_update
+            BEFORE UPDATE OF resume_id ON opportunities
+            WHEN NEW.resume_id IS NOT NULL
+                 AND NOT EXISTS (SELECT 1 FROM resumes WHERE id=NEW.resume_id)
+            BEGIN SELECT RAISE(ABORT, 'curriculo inexistente'); END;
+            CREATE TRIGGER IF NOT EXISTS packages_resume_fk_insert
+            BEFORE INSERT ON application_packages
+            WHEN NEW.resume_id IS NOT NULL
+                 AND NOT EXISTS (SELECT 1 FROM resumes WHERE id=NEW.resume_id)
+            BEGIN SELECT RAISE(ABORT, 'curriculo inexistente'); END;
+            CREATE TRIGGER IF NOT EXISTS packages_resume_fk_update
+            BEFORE UPDATE OF resume_id ON application_packages
+            WHEN NEW.resume_id IS NOT NULL
+                 AND NOT EXISTS (SELECT 1 FROM resumes WHERE id=NEW.resume_id)
+            BEGIN SELECT RAISE(ABORT, 'curriculo inexistente'); END;
+        """)
+
+    @staticmethod
+    def _migracao_chaves_normalizadas(cursor):
+        from app.models.job_listing import JobListing
+
+        listings = cursor.execute("SELECT * FROM job_listings ORDER BY id").fetchall()
+        for row in listings:
+            key = JobListing(
+                title=row["title"], company=row["company"], location=row["location"],
+                url=row["url"], provider=row["provider"], external_id=row["external_id"],
+            ).canonical_key
+            conflict = cursor.execute(
+                "SELECT id FROM job_listings WHERE canonical_key=? AND id<>?",
+                (key, row["id"]),
+            ).fetchone()
+            if not conflict:
+                cursor.execute(
+                    "UPDATE job_listings SET canonical_key=? WHERE id=?", (key, row["id"])
+                )
+
        
     # ==========================================================
     # CURRÍCULOS
     # ==========================================================
 
-    def salvar_curriculo(self, nome, caminho, texto):
+    def salvar_curriculo(self, nome, caminho, texto, estrutura=None, formato=None):
 
         content_hash = hashlib.sha256(texto.encode("utf-8", errors="ignore")).hexdigest()
         existente = self.conn.execute("SELECT id FROM resumes WHERE content_hash = ?", (content_hash,)).fetchone()
         if existente:
+            if estrutura:
+                self.conn.execute(
+                    "UPDATE resumes SET structured_json=?, source_format=? WHERE id=?",
+                    (json.dumps(estrutura, ensure_ascii=False), formato, existente["id"]),
+                )
+                self.conn.commit()
             self.definir_curriculo_ativo(existente["id"])
             return existente["id"]
 
@@ -429,13 +549,18 @@ class Database:
             nome_arquivo,
             caminho,
             texto,
-            content_hash
+            content_hash,
+            structured_json,
+            source_format
         )
         VALUES
         (
-            ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?
         )
-        """, (nome, caminho, texto, content_hash))
+        """, (
+            nome, caminho, texto, content_hash,
+            json.dumps(estrutura or {}, ensure_ascii=False), formato,
+        ))
 
         self.conn.commit()
         resume_id = cursor.lastrowid
@@ -450,7 +575,9 @@ class Database:
         SELECT
             id,
             nome_arquivo,
-            data_importacao
+            data_importacao,
+            structured_json,
+            source_format
         FROM resumes
         ORDER BY id DESC
         """)
@@ -467,7 +594,9 @@ class Database:
             nome_arquivo,
             caminho,
             texto,
-            data_importacao
+            data_importacao,
+            structured_json,
+            source_format
         FROM resumes
         ORDER BY id DESC
         """)
@@ -484,7 +613,9 @@ class Database:
             nome_arquivo,
             caminho,
             texto,
-            data_importacao
+            data_importacao,
+            structured_json,
+            source_format
         FROM resumes
         WHERE id = ?
         """, (resume_id,))
@@ -969,19 +1100,26 @@ class Database:
         return cursor.lastrowid
 
     def limpar_historico(self):
-
         cursor = self.conn.cursor()
-
         caminhos = [row["caminho"] for row in cursor.execute("SELECT caminho FROM resumes").fetchall()]
-        cursor.execute("DELETE FROM job_matches")
-        cursor.execute("DELETE FROM jobs")
-        cursor.execute("DELETE FROM resumes")
-
-        cursor.execute(
-            "DELETE FROM sqlite_sequence WHERE name='resumes'"
-        )
-        cursor.execute("DELETE FROM app_state WHERE key = 'active_resume_id'")
-        self.conn.commit()
+        try:
+            for table in (
+                "application_packages", "application_history", "opportunities",
+                "assistant_messages", "interview_sessions", "provider_search_metrics",
+                "job_search_results", "job_searches", "job_listings", "job_matches",
+                "jobs", "resume_analysis", "resumes",
+            ):
+                cursor.execute(f"DELETE FROM {table}")
+            cursor.execute("DELETE FROM app_state")
+            cursor.execute(
+                "DELETE FROM sqlite_sequence WHERE name IN "
+                "('resumes','resume_analysis','jobs','job_matches','opportunities',"
+                "'application_packages','application_history','job_searches','job_listings')"
+            )
+            self.conn.commit()
+        except sqlite3.Error:
+            self.conn.rollback()
+            raise
         for caminho in caminhos:
             self._remover_arquivo_curriculo(caminho)
 
@@ -995,6 +1133,7 @@ class Database:
         cargo=None,
         area=None,
         senioridade=None,
+        confianca=None,
         ats_score=None,
         hard_skills=None,
         soft_skills=None,
@@ -1020,6 +1159,7 @@ class Database:
             cargo,
             area,
             senioridade,
+            confianca,
             ats_score,
             hard_skills,
             soft_skills,
@@ -1037,13 +1177,14 @@ class Database:
         )
         VALUES
         (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
         """, (
             resume_id,
             cargo,
             area,
             senioridade,
+            confianca,
             ats_score,
             hard_skills,
             soft_skills,
@@ -1103,8 +1244,11 @@ class Database:
             a.senioridade,
             a.ats_score
         FROM resumes r
-        LEFT JOIN resume_analysis a
-            ON a.resume_id = r.id
+        LEFT JOIN resume_analysis a ON a.id = (
+            SELECT latest.id FROM resume_analysis latest
+            WHERE latest.resume_id = r.id
+            ORDER BY latest.created_at DESC, latest.id DESC LIMIT 1
+        )
         ORDER BY r.data_importacao DESC
         """)
 
@@ -1143,8 +1287,9 @@ class Database:
 
         cursor.execute("""
         SELECT ROUND(AVG(ats_score),0)
-        FROM resume_analysis
-        WHERE ats_score IS NOT NULL
+        FROM resume_analysis analysis
+        JOIN resumes resume ON resume.id = analysis.resume_id
+        WHERE analysis.ats_score IS NOT NULL
         """)
 
         valor = cursor.fetchone()[0]
@@ -1160,7 +1305,8 @@ class Database:
         SELECT
             cargo,
             created_at
-        FROM resume_analysis
+        FROM resume_analysis analysis
+        JOIN resumes resume ON resume.id = analysis.resume_id
         ORDER BY created_at DESC
         LIMIT 1
         """)
@@ -1177,7 +1323,8 @@ class Database:
             cargo,
             ats_score,
             created_at
-        FROM resume_analysis
+        FROM resume_analysis analysis
+        JOIN resumes resume ON resume.id = analysis.resume_id
         ORDER BY created_at DESC
         LIMIT ?
         """, (limite,))

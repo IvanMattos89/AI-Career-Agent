@@ -41,4 +41,5 @@ class AIConfig:
     # local. O valor pode ser ajustado nas configurações para modelos lentos.
     OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "60"))
     OLLAMA_CONNECT_TIMEOUT = int(os.getenv("OLLAMA_CONNECT_TIMEOUT", "5"))
+    OLLAMA_MAX_PROMPT_CHARS = int(os.getenv("OLLAMA_MAX_PROMPT_CHARS", "24000"))
     OPENAI_TIMEOUT = int(os.getenv("OPENAI_TIMEOUT", "60"))

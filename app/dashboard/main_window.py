@@ -1,5 +1,5 @@
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QCloseEvent, QFont
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -120,6 +120,35 @@ class MainWindow(QMainWindow):
         )
 
         self._abrir_pagina(0)
+        self._shutting_down = False
+
+    def shutdown_background_tasks(self):
+        """Finaliza todos os workers antes que o Qt destrua suas páginas."""
+        if self._shutting_down:
+            return
+        self._shutting_down = True
+        pages = (
+            self.dashboard_page,
+            self.resume_page,
+            self.job_match_page,
+            self.history_page,
+            self.analysis_page,
+            self.career_hub_page,
+            self.settings_page,
+        )
+        for page in pages:
+            shutdown = getattr(page, "shutdown", None)
+            if callable(shutdown):
+                shutdown()
+        for page in pages:
+            for owner in (page, getattr(page, "service", None)):
+                database = getattr(owner, "db", None)
+                if database is not None:
+                    database.close()
+
+    def closeEvent(self, event: QCloseEvent):
+        self.shutdown_background_tasks()
+        super().closeEvent(event)
 
     @staticmethod
     def _nav_button(texto):

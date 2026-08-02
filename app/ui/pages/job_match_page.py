@@ -1,4 +1,5 @@
 import json
+from html import escape
 from urllib.parse import quote_plus
 
 from PySide6.QtCore import QThread, QUrl
@@ -26,9 +27,15 @@ from app.database.sqlite_db import Database
 from app.services.job_search_service import JobSearchService
 from app.services.report_service import ReportService
 from app.services.resume_adaptation_service import ResumeAdaptationService
+from app.ui.resume_preview_dialog import ResumePreviewDialog
 from app.ui.widgets.score_card import ScoreCard
 from app.ui.widgets.section_card import SectionCard
-from app.ui.workers import JobBatchMatchWorker, JobMatchWorker, JobSearchWorker
+from app.ui.workers import (
+    JobBatchMatchWorker,
+    JobMatchWorker,
+    JobSearchWorker,
+    shutdown_threads,
+)
 
 
 class JobMatchPage(QWidget):
@@ -66,7 +73,7 @@ class JobMatchPage(QWidget):
         self.perfil_ativo.setWordWrap(True)
         self.perfil_ativo.setObjectName("profileBanner")
         layout.addWidget(self.perfil_ativo)
-        layout.addWidget(QLabel("Buscar vagas remotas automaticamente"))
+        layout.addWidget(QLabel("Buscar vagas no Brasil automaticamente"))
         busca = QHBoxLayout()
         self.txtBusca = QLineEdit()
         self.txtBusca.setPlaceholderText("Ex.: analista fiscal, Python, data analyst")
@@ -176,10 +183,11 @@ class JobMatchPage(QWidget):
         self.btn_pdf = QPushButton("Exportar PDF")
         self.btn_docx.clicked.connect(self.exportar_docx)
         self.btn_pdf.clicked.connect(self.exportar_pdf)
-        self.btn_curriculo_docx = QPushButton("Gerar currículo adaptado (DOCX)")
+        self.btn_curriculo_docx = QPushButton("Pré-visualizar e editar currículo direcionado")
         self.btn_curriculo_pdf = QPushButton("Gerar currículo adaptado (PDF)")
-        self.btn_curriculo_docx.clicked.connect(self.exportar_curriculo_adaptado_docx)
-        self.btn_curriculo_pdf.clicked.connect(self.exportar_curriculo_adaptado_pdf)
+        self.btn_curriculo_docx.clicked.connect(self.abrir_previa_curriculo)
+        self.btn_curriculo_pdf.clicked.connect(self.abrir_previa_curriculo)
+        self.btn_curriculo_pdf.hide()
         for botao in (self.btn_docx, self.btn_pdf, self.btn_curriculo_docx, self.btn_curriculo_pdf):
             botao.setProperty("secondary", True)
         self.btn_docx.setEnabled(False)
@@ -228,22 +236,25 @@ class JobMatchPage(QWidget):
             self.perfil_ativo.setText("Nenhum currículo analisado. Importe um currículo em “Meu currículo” para ativar a busca personalizada.")
             self.btnBuscarPerfil.setEnabled(False)
             return
+        service = JobSearchService()
         try:
-            recomendacao = JobSearchService().recomendacao_para_curriculo()
+            recomendacao = service.recomendacao_para_curriculo()
         except ValueError:
             recomendacao = {"principal": analise["cargo"] or "competências do currículo", "titulos": [], "palavras_chave": []}
+        finally:
+            service.db.close()
         skills = [item.strip() for item in (analise["hard_skills"] or "").split(";") if item.strip()]
         destaque = ", ".join(skills[:6]) or "competências não identificadas"
         titulos = " · ".join(recomendacao["titulos"][:4]) or recomendacao["principal"]
         comprovadas = ", ".join(recomendacao.get("competencias_comprovadas", [])[:10]) or destaque
         sugeridas = ", ".join(recomendacao.get("palavras_sugeridas", [])[:8]) or "Nenhuma sugestão adicional"
         self.perfil_ativo.setText(
-            f"<b>Currículo ativo:</b> {analise['nome_arquivo']} &nbsp; | &nbsp; "
-            f"<b>Perfil:</b> {analise['cargo'] or 'Não identificado'} &nbsp; | &nbsp; "
-            f"<b>Busca recomendada (Brasil):</b> {recomendacao['principal']}<br>"
-            f"<b>Títulos relacionados:</b> {titulos}<br>"
-            f"<b>Competências comprovadas:</b> {comprovadas}<br>"
-            f"<b>Termos sugeridos para pesquisar (não comprovam experiência):</b> {sugeridas}"
+            f"<b>Currículo ativo:</b> {escape(analise['nome_arquivo'])} &nbsp; | &nbsp; "
+            f"<b>Perfil:</b> {escape(analise['cargo'] or 'Não identificado')} &nbsp; | &nbsp; "
+            f"<b>Busca recomendada (Brasil):</b> {escape(recomendacao['principal'])}<br>"
+            f"<b>Títulos relacionados:</b> {escape(titulos)}<br>"
+            f"<b>Competências comprovadas:</b> {escape(comprovadas)}<br>"
+            f"<b>Termos sugeridos para pesquisar (não comprovam experiência):</b> {escape(sugeridas)}"
         )
         self.btnBuscarPerfil.setEnabled(True)
 
@@ -283,7 +294,11 @@ class JobMatchPage(QWidget):
         if not self.db.obter_analise_ativa():
             return
         try:
-            self.txtBusca.setText(JobSearchService().termo_para_curriculo())
+            service = JobSearchService()
+            try:
+                self.txtBusca.setText(service.termo_para_curriculo())
+            finally:
+                service.db.close()
         except ValueError as erro:
             if not silencioso:
                 QMessageBox.information(self, "Busca de vagas", str(erro))
@@ -416,15 +431,22 @@ class JobMatchPage(QWidget):
             QMessageBox.information(self, "Abrir vaga", "Selecione uma vaga na lista.")
             return
         url = self.vagas_encontradas[linha].get("url")
-        if url:
-            QDesktopServices.openUrl(QUrl(url))
+        target = QUrl(url or "")
+        if target.scheme().casefold() not in {"http", "https"}:
+            QMessageBox.warning(self, "Abrir vaga", "O link da vaga não é HTTP/HTTPS válido.")
+            return
+        QDesktopServices.openUrl(target)
 
     def abrir_pesquisa_externa(self, fonte):
         """Abre uma busca pública já limitada ao cargo e local selecionados."""
         termo = self.txtBusca.text().strip()
         if not termo:
             try:
-                termo = JobSearchService().termo_para_curriculo()
+                service = JobSearchService()
+                try:
+                    termo = service.termo_para_curriculo()
+                finally:
+                    service.db.close()
                 self.txtBusca.setText(termo)
             except ValueError:
                 QMessageBox.information(self, "Busca de vagas", "Informe um cargo ou analise um currículo antes de pesquisar.")
@@ -502,6 +524,10 @@ class JobMatchPage(QWidget):
             self.batch_thread.requestInterruption()
             self.status.setText("Cancelamento solicitado; finalizando a vaga em andamento...")
 
+    def shutdown(self):
+        """Interrompe buscas e comparações ainda ativas durante a saída."""
+        shutdown_threads((self.thread, self.search_thread, self.batch_thread))
+
     def finalizar_processamento(self):
         self.btnComparar.setEnabled(True)
         self.status.setText("")
@@ -567,10 +593,22 @@ class JobMatchPage(QWidget):
             QMessageBox.critical(self, "Erro ao exportar PDF", str(erro))
 
     def _preparar_curriculo_adaptado(self):
-        self.curriculo_adaptado = ResumeAdaptationService().preparar(
-            self.txtVaga.toPlainText(), self.titulo_vaga_atual,
-        )
+        service = ResumeAdaptationService()
+        try:
+            self.curriculo_adaptado = service.preparar(
+                self.txtVaga.toPlainText(), self.titulo_vaga_atual,
+            )
+        finally:
+            service.db.close()
         return self.curriculo_adaptado
+
+    def abrir_previa_curriculo(self):
+        try:
+            dados = self._preparar_curriculo_adaptado()
+            dialog = ResumePreviewDialog(dados, self.relatorios, self)
+            dialog.exec()
+        except Exception as erro:
+            QMessageBox.critical(self, "Currículo direcionado", str(erro))
 
     def exportar_curriculo_adaptado_docx(self):
         try:

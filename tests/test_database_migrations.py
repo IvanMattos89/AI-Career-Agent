@@ -51,15 +51,26 @@ class DatabaseMigrationTest(unittest.TestCase):
                 package_columns = {
                     row[1] for row in database.conn.execute("PRAGMA table_info(application_packages)")
                 }
+                resume_columns = {
+                    row[1] for row in database.conn.execute("PRAGMA table_info(resumes)")
+                }
                 backup = database.criar_backup(root / "backup.db")
                 diagnostic = database.diagnostico()
+                analysis_columns = {
+                    row[1] for row in database.conn.execute(
+                        "PRAGMA table_info(resume_analysis)"
+                    )
+                }
                 database.close()
 
-            self.assertEqual(versions, [1, 2])
+            self.assertEqual(versions, [1, 2, 3, 4, 5])
             self.assertEqual(opportunity["titulo"], "Analista Fiscal")
             self.assertIn("resume_id", package_columns)
+            self.assertIn("structured_json", resume_columns)
+            self.assertIn("confianca", analysis_columns)
             self.assertTrue(backup.is_file())
             self.assertEqual(diagnostic["integridade"], "ok")
+            self.assertEqual(diagnostic["violacoes_fk"], 0)
 
 
 if __name__ == "__main__":

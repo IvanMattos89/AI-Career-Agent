@@ -6,11 +6,16 @@ from shutil import copy2
 from zipfile import BadZipFile, ZipFile
 
 from docx import Document
+from docx.oxml.table import CT_Tbl
+from docx.oxml.text.paragraph import CT_P
+from docx.table import Table
+from docx.text.paragraph import Paragraph
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
 from app.config import RESUMES_DIR
 from app.database.sqlite_db import Database
+from app.services.resume_structure_service import ResumeStructureService
 
 
 @dataclass(frozen=True)
@@ -48,10 +53,10 @@ class ResumeService:
             except OSError as erro:
                 raise OSError("Não foi possível copiar o currículo selecionado.") from erro
 
+        estrutura = ResumeStructureService.from_text(texto)
         resume_id = self.db.salvar_curriculo(
-            destino.name,
-            str(destino),
-            texto
+            destino.name, str(destino), texto,
+            estrutura=estrutura, formato=origem.suffix.lower().lstrip("."),
         )
 
         return ResumeImportResult(resume_id=resume_id, destination=destino, text=texto)
@@ -98,10 +103,24 @@ class ResumeService:
             documento = Document(arquivo)
         except (BadZipFile, ValueError, KeyError) as erro:
             raise ValueError("Não foi possível abrir o DOCX. Verifique se o arquivo não está corrompido.") from erro
-        partes = [p.text for p in documento.paragraphs if p.text.strip()]
-        for tabela in documento.tables:
-            for linha in tabela.rows:
-                partes.append(" ".join(celula.text.strip() for celula in linha.cells if celula.text.strip()))
+        partes = []
+        for element in documento.element.body.iterchildren():
+            if isinstance(element, CT_P):
+                paragraph = Paragraph(element, documento)
+                text = paragraph.text.strip()
+                if not text:
+                    continue
+                style = (paragraph.style.name if paragraph.style else "").casefold()
+                if "list" in style and not re.match(r"^[•●▪◦\-*–—]\s+", text):
+                    text = "- " + text
+                partes.append(text)
+            elif isinstance(element, CT_Tbl):
+                table = Table(element, documento)
+                for row in table.rows:
+                    cells = [re.sub(r"\s+", " ", cell.text).strip() for cell in row.cells]
+                    content = " | ".join(dict.fromkeys(cell for cell in cells if cell))
+                    if content:
+                        partes.append(content)
         return "\n".join(partes)
 
     def _ler_pdf(self, arquivo):

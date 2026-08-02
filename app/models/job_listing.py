@@ -6,7 +6,7 @@ import hashlib
 import re
 import unicodedata
 from dataclasses import asdict, dataclass, field
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
 def normalize_text(value: str | None) -> str:
@@ -20,7 +20,38 @@ def normalize_url(value: str | None) -> str:
         return ""
     parts = urlsplit(value.strip())
     path = parts.path.rstrip("/")
-    return urlunsplit((parts.scheme.casefold(), parts.netloc.casefold(), path, "", ""))
+    query = urlencode([
+        (key, item) for key, item in parse_qsl(parts.query, keep_blank_values=False)
+        if not key.casefold().startswith("utm_")
+        and key.casefold() not in {"source", "ref", "referrer", "tracking"}
+    ])
+    return urlunsplit((parts.scheme.casefold(), parts.netloc.casefold(), path, query, ""))
+
+
+def normalize_company(value: str | None) -> str:
+    text = normalize_text(value)
+    text = re.sub(r"\b(?:ltda|limitada|s/?a|sa|inc|llc|corp|corporation)\b", " ", text)
+    return re.sub(r"\s+", " ", text).strip(" -.,")
+
+
+def normalize_title(value: str | None) -> str:
+    text = normalize_text(value)
+    replacements = {
+        r"\bsr\.?\b": "senior",
+        r"\bsenior\b": "senior",
+        r"\bjr\.?\b": "junior",
+        r"\bpl\.?\b": "pleno",
+    }
+    for pattern, replacement in replacements.items():
+        text = re.sub(pattern, replacement, text)
+    return re.sub(r"\s+", " ", text).strip(" -.,")
+
+
+def normalize_location(value: str | None) -> str:
+    text = normalize_text(value)
+    text = re.sub(r"\b(?:brasil|brazil)\b", " ", text)
+    text = re.sub(r"\s*[/,|-]\s*", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 @dataclass(slots=True)
@@ -47,7 +78,7 @@ class JobListing:
     def canonical_key(self) -> str:
         normalized_url = normalize_url(self.url)
         signature = "|".join(
-            (normalize_text(self.company), normalize_text(self.title), normalize_text(self.location))
+            (normalize_company(self.company), normalize_title(self.title), normalize_location(self.location))
         )
         company_known = normalize_text(self.company) not in {"", "empresa nao informada"}
         # A assinatura permite reconhecer a mesma publicação vinda de URLs e

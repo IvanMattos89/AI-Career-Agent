@@ -23,7 +23,7 @@ class DashboardPage(QWidget):
 
         grid = QGridLayout()
 
-        self.cardATS = InfoCard("ATS Médio", "0")
+        self.cardATS = InfoCard("Qualidade ATS média", "0")
         self.cardCurriculos = InfoCard("Currículos", "0")
         self.cardVagas = InfoCard("Job Matches", "0")
         self.cardUltima = InfoCard("Último Cargo", "-")

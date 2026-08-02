@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.services.resume_service import ResumeService
-from app.ui.workers import ResumeAnalysisWorker, ResumeImportWorker
+from app.ui.workers import ResumeAnalysisWorker, ResumeImportWorker, shutdown_threads
 
 
 class ResumePage(QWidget):
@@ -103,3 +103,7 @@ class ResumePage(QWidget):
         self.btn_selecionar.setText("Selecionar Currículo")
         self.thread = None
         self.worker = None
+
+    def shutdown(self):
+        """Interrompe com segurança importação ou análise ao fechar o aplicativo."""
+        shutdown_threads((self.import_thread, self.thread))

@@ -17,6 +17,7 @@ class AnalysisService:
             cargo=analise.cargo,
             area=analise.area,
             senioridade=analise.senioridade,
+            confianca=analise.confianca,
             ats_score=analise.ats_score,
             hard_skills="; ".join(analise.hard_skills),
             soft_skills="; ".join(analise.soft_skills),

@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 
 from dotenv import set_key
 from PySide6.QtCore import QThread, QUrl
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QIntValidator
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -30,7 +30,7 @@ from app.ai.config import ENV_FILE, AIConfig
 from app.ai.logging_config import LOG_DIR
 from app.config import DATABASE, REPORTS_DIR
 from app.database.sqlite_db import Database
-from app.ui.workers import OllamaStatusWorker
+from app.ui.workers import OllamaStatusWorker, shutdown_threads
 
 
 class SettingsPage(QWidget):
@@ -115,13 +115,16 @@ class SettingsPage(QWidget):
         self.ollama_url.setPlaceholderText("http://localhost:11434")
         self.ollama_model = QLineEdit(AIConfig.OLLAMA_MODEL)
         self.ollama_timeout = QLineEdit(str(AIConfig.OLLAMA_TIMEOUT))
+        self.ollama_timeout.setValidator(QIntValidator(5, 600, self))
         self.ollama_timeout.setMaximumWidth(160)
         self.openai_model = QLineEdit(AIConfig.OPENAI_MODEL)
+        self.openai_key = self._secret_field(AIConfig.OPENAI_API_KEY, "Chave da API OpenAI")
         form.addRow("Estratégia", self.provider)
         form.addRow("URL do Ollama", self.ollama_url)
         form.addRow("Modelo Ollama", self.ollama_model)
         form.addRow("Timeout (segundos)", self.ollama_timeout)
         form.addRow("Modelo OpenAI", self.openai_model)
+        form.addRow("Chave OpenAI", self.openai_key)
         layout.addWidget(provider_group)
 
         privacy_group = QGroupBox("Consentimento e privacidade")
@@ -297,7 +300,7 @@ class SettingsPage(QWidget):
 
     def _alternar_segredos(self, visible):
         mode = QLineEdit.Normal if visible else QLineEdit.Password
-        for field in (self.gupy_token, self.adzuna_key, self.jooble_key):
+        for field in (self.openai_key, self.gupy_token, self.adzuna_key, self.jooble_key):
             field.setEchoMode(mode)
 
     def _atualizar_status_provedores(self):
@@ -337,7 +340,11 @@ class SettingsPage(QWidget):
         self.lbl_oportunidades[1].setText(str(len(self.db.listar_oportunidades())))
         diagnostic = self.db.diagnostico()
         size_mb = diagnostic["tamanho_bytes"] / (1024 * 1024)
-        status = "Íntegro" if diagnostic["integridade"] == "ok" else "Verificar"
+        status = (
+            "Íntegro"
+            if diagnostic["integridade"] == "ok" and diagnostic.get("violacoes_fk", 0) == 0
+            else "Verificar"
+        )
         self.lbl_integridade[1].setText(f"{status} · v{diagnostic['migracao']} · {size_mb:.1f} MB")
         metrics = self.db.metricas_provedores()
         if metrics:
@@ -358,6 +365,7 @@ class SettingsPage(QWidget):
             "OLLAMA_MODEL": self.ollama_model.text().strip(),
             "OLLAMA_TIMEOUT": self.ollama_timeout.text().strip(),
             "OPENAI_MODEL": self.openai_model.text().strip(),
+            "OPENAI_API_KEY": self.openai_key.text().strip(),
             "OPENAI_DATA_CONSENT": "true" if self.openai_consent.isChecked() else "false",
             "OLLAMA_EXTERNAL_CONSENT": "true" if self.ollama_external_consent.isChecked() else "false",
             "JOB_GREENHOUSE_BOARDS": self.greenhouse_boards.text().strip(),
@@ -419,7 +427,9 @@ class SettingsPage(QWidget):
         self.lbl_ollama.setText("Testando…")
         self.lbl_ollama.setProperty("state", "warning")
         self.ollama_thread = QThread(self)
-        self.ollama_worker = OllamaStatusWorker(self.ollama_url.text().strip())
+        self.ollama_worker = OllamaStatusWorker(
+            self.ollama_url.text().strip(), self.ollama_model.text().strip()
+        )
         self.ollama_worker.moveToThread(self.ollama_thread)
         self.ollama_thread.started.connect(self.ollama_worker.run)
         self.ollama_worker.finished.connect(self.receber_status_ollama)
@@ -439,6 +449,10 @@ class SettingsPage(QWidget):
         self.btn_testar.setEnabled(True)
         self.ollama_thread = None
         self.ollama_worker = None
+
+    def shutdown(self):
+        """Interrompe o diagnóstico do Ollama durante a saída."""
+        shutdown_threads((self.ollama_thread,))
 
     def criar_backup(self):
         default = f"ai_career_agent_backup_{datetime.now():%Y%m%d_%H%M%S}.db"

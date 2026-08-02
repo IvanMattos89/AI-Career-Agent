@@ -1,5 +1,6 @@
 import re
 import unicodedata
+from datetime import date
 
 from app.ai.ats_score import calculate
 from app.ai.llm_client import LLMClient
@@ -80,7 +81,10 @@ class ResumeAnalyzer:
         melhor = ("Profissão não identificada", "Não identificada", 0)
         inicio = texto[:1800]
         for cargo, (area, aliases) in self.PERFIS.items():
-            pontos = sum(len(re.findall(r"(?<!\\w)" + re.escape(alias) + r"(?!\\w)", texto)) for alias in aliases)
+            pontos = sum(
+                len(re.findall(r"(?<!\w)" + re.escape(alias) + r"(?!\w)", texto))
+                for alias in aliases
+            )
             pontos += sum(2 for alias in aliases if alias in inicio)
             if pontos > melhor[2]:
                 melhor = (cargo, area, pontos)
@@ -88,18 +92,50 @@ class ResumeAnalyzer:
 
     @staticmethod
     def _anos_experiencia(texto):
-        anos = [int(valor) for valor in re.findall(r"(?<!\d)(\d{1,2})\s*\+?\s*anos?", texto)]
-        return max(anos, default=0)
+        explicit = [int(valor) for valor in re.findall(r"(?<!\d)(\d{1,2})\s*\+?\s*anos?", texto)]
+        intervals = []
+        current = date.today()
+        pattern = re.compile(
+            r"(?:(\d{1,2})[/-])?((?:19|20)\d{2})\s*[-–—]\s*"
+            r"(?:(?:(\d{1,2})[/-])?((?:19|20)\d{2})|(?:atual|presente))",
+            flags=re.I,
+        )
+        for match in pattern.finditer(texto):
+            start_month = min(12, max(1, int(match.group(1) or 1)))
+            start = int(match.group(2)) * 12 + start_month - 1
+            if match.group(4):
+                end_month = min(12, max(1, int(match.group(3) or 12)))
+                end = int(match.group(4)) * 12 + end_month - 1
+            else:
+                end = current.year * 12 + current.month - 1
+            if 0 <= end - start <= 60 * 12:
+                intervals.append((start, end))
+        covered: set[int] = set()
+        for start, end in intervals:
+            covered.update(range(start, end + 1))
+        calculated = len(covered) // 12
+        return max([calculated, *explicit], default=0)
 
     @staticmethod
     def _detectar_idiomas(texto):
         idiomas = {"ingles": "Inglês", "espanhol": "Espanhol", "frances": "Francês", "alemao": "Alemão"}
-        return [nome for termo, nome in idiomas.items() if re.search(r"(?<!\\w)" + termo + r"(?!\\w)", texto)]
+        return [
+            nome for termo, nome in idiomas.items()
+            if re.search(r"(?<!\w)" + termo + r"(?!\w)", texto)
+        ]
 
     @staticmethod
     def _detectar_certificacoes(texto):
-        certificados = {"crc": "CRC", "pmp": "PMP", "cpa": "CPA", "aws certified": "AWS Certified", "sap": "Certificação SAP"}
-        return [nome for termo, nome in certificados.items() if termo in texto]
+        patterns = {
+            "CRC": r"(?<!\w)crc(?!\w)",
+            "PMP": r"(?<!\w)pmp(?!\w)",
+            "CPA": r"(?<!\w)cpa(?:[- ]?\d{2})?(?!\w)",
+            "AWS Certified": r"(?<!\w)aws certified(?!\w)",
+            "Certificação SAP": (
+                r"(?<!\w)(?:certificacao|certificado|academia)\s+(?:em\s+)?sap(?!\w)"
+            ),
+        }
+        return [name for name, pattern in patterns.items() if re.search(pattern, texto)]
 
     def comparar(self, prompt, timeout=None):
         return self.llm.perguntar(prompt, timeout=timeout)

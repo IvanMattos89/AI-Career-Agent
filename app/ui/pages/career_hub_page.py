@@ -1,3 +1,6 @@
+import re
+from datetime import datetime
+from html import escape
 from urllib.parse import quote_plus
 
 from PySide6.QtCore import Qt, QThread, QUrl, Signal
@@ -23,7 +26,7 @@ from PySide6.QtWidgets import (
 from app.database.sqlite_db import Database
 from app.services.job_search_service import JobSearchService
 from app.services.report_service import ReportService
-from app.ui.workers import CareerWorker
+from app.ui.workers import CareerWorker, shutdown_threads
 
 
 class CareerHubPage(QWidget):
@@ -158,22 +161,26 @@ class CareerHubPage(QWidget):
             if hasattr(self, "btn_busca_integrada"):
                 self.btn_busca_integrada.setEnabled(False)
             return
-        recomendacao = JobSearchService().recomendacao_para_curriculo()
+        service = JobSearchService()
+        try:
+            recomendacao = service.recomendacao_para_curriculo()
+        finally:
+            service.db.close()
         habilidades = [x.strip() for x in (analise["hard_skills"] or "").split(";") if x.strip()]
         faltantes = [x.strip() for x in (analise["competencias_faltantes"] or "").split(";") if x.strip()]
         titulos = " · ".join(recomendacao["titulos"][:4])
         comprovadas = ", ".join(recomendacao.get("competencias_comprovadas", [])[:10])
         sugeridas = ", ".join(recomendacao.get("palavras_sugeridas", [])[:8])
         self.perfil_resumo.setText(
-            f"<b>Perfil ativo:</b> {analise['cargo'] or 'Não identificado'} &nbsp; | &nbsp; "
-            f"<b>Área:</b> {analise['area'] or 'Não identificada'} &nbsp; | &nbsp; "
-            f"<b>ATS:</b> {analise['ats_score'] or 0}%<br>"
-            f"<b>Busca recomendada (Brasil):</b> {recomendacao['principal']}<br>"
-            f"<b>Títulos relacionados:</b> {titulos}<br>"
-            f"<b>Competências identificadas:</b> {', '.join(habilidades[:8]) or 'Não identificadas'}<br>"
-            f"<b>Competências comprovadas:</b> {comprovadas or 'Não identificadas'}<br>"
-            f"<b>Termos de mercado sugeridos:</b> {sugeridas or 'Nenhuma sugestão adicional'}<br>"
-            f"<b>Para desenvolver:</b> {', '.join(faltantes[:4]) or 'Revise as recomendações da análise'}"
+            f"<b>Perfil ativo:</b> {escape(analise['cargo'] or 'Não identificado')} &nbsp; | &nbsp; "
+            f"<b>Área:</b> {escape(analise['area'] or 'Não identificada')} &nbsp; | &nbsp; "
+            f"<b>Qualidade ATS estimada:</b> {analise['ats_score'] or 0}%<br>"
+            f"<b>Busca recomendada (Brasil):</b> {escape(recomendacao['principal'])}<br>"
+            f"<b>Títulos relacionados:</b> {escape(titulos)}<br>"
+            f"<b>Competências identificadas:</b> {escape(', '.join(habilidades[:8]) or 'Não identificadas')}<br>"
+            f"<b>Competências comprovadas:</b> {escape(comprovadas or 'Não identificadas')}<br>"
+            f"<b>Termos de mercado sugeridos:</b> {escape(sugeridas or 'Nenhuma sugestão adicional')}<br>"
+            f"<b>Para desenvolver:</b> {escape(', '.join(faltantes[:4]) or 'Revise as recomendações da análise')}"
         )
         if hasattr(self, "btn_busca_integrada"):
             self.btn_busca_integrada.setEnabled(True)
@@ -181,7 +188,11 @@ class CareerHubPage(QWidget):
     def abrir_plataforma(self, plataforma):
         """Abre uma pesquisa oficial sem tentar acessar áreas privadas do candidato."""
         try:
-            consulta = JobSearchService().termo_para_curriculo()
+            service = JobSearchService()
+            try:
+                consulta = service.termo_para_curriculo()
+            finally:
+                service.db.close()
         except ValueError:
             QMessageBox.information(self, "Busca de vagas", "Analise um currículo antes de pesquisar vagas.")
             return
@@ -269,8 +280,13 @@ class CareerHubPage(QWidget):
         titulo = self.o_titulo.text().strip()
         if not titulo:
             QMessageBox.warning(self, "Oportunidade", "Informe o título da vaga."); return
+        try:
+            pipeline = self._dados_pipeline()
+        except ValueError as error:
+            QMessageBox.warning(self, "Oportunidade", str(error))
+            return
         oportunidade_id = self.db.salvar_oportunidade(titulo, self.o_empresa.text().strip(), self.o_plataforma.currentText(), self.o_url.text().strip(), self.o_descricao.toPlainText().strip(), self.o_status.currentText())
-        self.db.atualizar_candidatura(oportunidade_id, **self._dados_pipeline())
+        self.db.atualizar_candidatura(oportunidade_id, **pipeline)
         self.o_titulo.clear(); self.o_empresa.clear(); self.o_url.clear(); self.o_descricao.clear(); self.carregar_oportunidades()
         self.status_busca.setText(f"Oportunidade #{oportunidade_id} salva. Se ela já existia, os dados foram atualizados sem criar duplicidade.")
 
@@ -281,11 +297,31 @@ class CareerHubPage(QWidget):
             return
         item = self.tabela.item(linha, 0)
         oportunidade_id = item.data(Qt.UserRole)
-        self.db.atualizar_candidatura(oportunidade_id, **self._dados_pipeline())
+        try:
+            pipeline = self._dados_pipeline()
+        except ValueError as error:
+            QMessageBox.warning(self, "Oportunidades", str(error))
+            return
+        self.db.atualizar_candidatura(oportunidade_id, **pipeline)
         self.carregar_oportunidades()
         self.status_busca.setText("Etapa da oportunidade atualizada.")
 
     def _dados_pipeline(self):
+        for label, value in (
+            ("Prazo", self.o_prazo.text().strip()),
+            ("Data da candidatura", self.o_data_candidatura.text().strip()),
+        ):
+            if value:
+                try:
+                    datetime.strptime(value, "%Y-%m-%d")
+                except ValueError as error:
+                    raise ValueError(f"{label} deve usar o formato AAAA-MM-DD.") from error
+        email = self.o_email.text().strip()
+        if email and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+            raise ValueError("Informe um e-mail válido para o recrutador.")
+        url = self.o_url.text().strip()
+        if url and QUrl(url).scheme().casefold() not in {"http", "https"}:
+            raise ValueError("O link da vaga deve começar com http:// ou https://.")
         return {
             "status": self.o_status.currentText(),
             "applied_at": self.o_data_candidatura.text().strip(),
@@ -293,7 +329,7 @@ class CareerHubPage(QWidget):
             "work_model": self.o_modelo.currentText(),
             "employment_type": self.o_contrato.currentText(),
             "recruiter_name": self.o_recrutador.text().strip(),
-            "recruiter_email": self.o_email.text().strip(),
+            "recruiter_email": email,
             "recruiter_phone": self.o_telefone.text().strip(),
             "next_action": self.o_proxima_acao.text().strip(),
             "next_action_at": self.o_prazo.text().strip(),
@@ -304,7 +340,13 @@ class CareerHubPage(QWidget):
         oportunidade_id = self.tabela.item(linha, 0).data(Qt.UserRole)
         oportunidade = self.db.obter_oportunidade(oportunidade_id)
         if oportunidade and oportunidade["url"]:
-            QDesktopServices.openUrl(QUrl(oportunidade["url"]))
+            target = QUrl(oportunidade["url"])
+            if target.scheme().casefold() not in {"http", "https"}:
+                QMessageBox.warning(
+                    self, "Abrir oportunidade", "O link informado não é HTTP/HTTPS válido."
+                )
+                return
+            QDesktopServices.openUrl(target)
 
     def carregar_oportunidades(self):
         dados = self.db.listar_oportunidades(); self.tabela.setRowCount(len(dados))
@@ -370,8 +412,9 @@ class CareerHubPage(QWidget):
 
     def resposta_chat(self, resposta):
         pergunta = self.chat_input.text().strip()
-        self.chat.append(f"<b>Você:</b> {pergunta}")
-        self.chat.append(f"<b>Assistente:</b> {resposta}<br>")
+        self.chat.append(f"<b>Você:</b> {escape(pergunta)}")
+        safe_response = escape(str(resposta)).replace("\n", "<br>")
+        self.chat.append(f"<b>Assistente:</b> {safe_response}<br>")
         self.chat_input.clear()
 
     def mostrar_pergunta(self, pergunta):
@@ -410,3 +453,7 @@ class CareerHubPage(QWidget):
             QMessageBox.information(self, "Material criado", f"DOCX salvo em:\n{destino.resolve()}")
         except Exception as erro:
             QMessageBox.critical(self, "Erro ao exportar", str(erro))
+
+    def shutdown(self):
+        """Interrompe a operação da Central de Carreira durante a saída."""
+        shutdown_threads((self.thread,))
