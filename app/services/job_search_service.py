@@ -1,21 +1,19 @@
+import os
 import re
+import time
 import unicodedata
+from datetime import datetime, timezone
 
 import requests
-from bs4 import BeautifulSoup
 
 from app.database.sqlite_db import Database
 from app.models.job_listing import JobListing, normalize_text
-from app.services.job_match_service import JobMatchService
 from app.services.job_providers import default_providers
 
 
 class JobSearchService:
     """Consulta fontes públicas de vagas sem scraping e filtra por relevância local."""
 
-    REMOTIVE_URL = "https://remotive.com/api/remote-jobs"
-    ARBEITNOW_URL = "https://www.arbeitnow.com/api/job-board-api"
-    VAGAS_URL = "https://www.vagas.com.br/vagas-de-{}"
     ESTADOS_BRASIL = {
         "AC": "Acre", "AL": "Alagoas", "AP": "Amapá", "AM": "Amazonas", "BA": "Bahia",
         "CE": "Ceará", "DF": "Distrito Federal", "ES": "Espírito Santo", "GO": "Goiás",
@@ -37,8 +35,11 @@ class JobSearchService:
         "fiscal": {
             "principal": "Analista Fiscal",
             "titulos": [
-                "Analista Fiscal", "Analista Fiscal Pleno", "Analista Tributário",
-                "Analista Fiscal e Tributário", "Analista de Impostos",
+                "Analista Fiscal", "Analista Fiscal Sênior", "Analista Tributário",
+                "Analista Tributário Sênior",
+                "Especialista Fiscal", "Especialista em Tributos Indiretos",
+                "Indirect Tax Analyst", "Tax Technology Analyst", "Consultor SAP Fiscal",
+                "SAP Tax Consultant", "Consultor Synchro/Tax One",
             ],
             "palavras_mercado": [
                 "apuração de tributos", "obrigações acessórias", "escrituração fiscal",
@@ -99,76 +100,6 @@ class JobSearchService:
             return False
         return True
 
-    @classmethod
-    def _slug_busca(cls, termo):
-        normalizado = cls._normalizar(termo)
-        palavras = re.findall(r"[a-z0-9]+", normalizado)
-        return "-".join(palavras)
-
-    def _vagas_com(self, termo):
-        """Lê a listagem pública brasileira, sem acessar área autenticada."""
-        slug = self._slug_busca(termo)
-        resposta = requests.get(
-            self.VAGAS_URL.format(slug), timeout=20,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; AI-Career-Agent/3.1)"},
-        )
-        resposta.raise_for_status()
-        pagina = BeautifulSoup(resposta.text, "html.parser")
-        vagas = []
-        for item in pagina.select("li.vaga"):
-            link = item.select_one("a.link-detalhes-vaga")
-            if not link:
-                continue
-            titulo = link.get("title") or link.get_text(" ", strip=True)
-            empresa = item.select_one(".emprVaga")
-            localizacao = item.select_one(".vaga-local")
-            descricao = item.select_one(".detalhes")
-            if not titulo or not localizacao:
-                continue
-            vagas.append({
-                "titulo": titulo.strip(),
-                "empresa": empresa.get_text(" ", strip=True) if empresa else "Empresa não informada",
-                "localizacao": " ".join(localizacao.get_text(" ", strip=True).split()),
-                "url": requests.compat.urljoin("https://www.vagas.com.br", link.get("href", "")),
-                "descricao": JobMatchService.limpar_descricao(descricao.get_text(" ", strip=True) if descricao else ""),
-                "tags": [],
-                "fonte": "Vagas.com",
-            })
-        return vagas
-
-    def _remotive(self, termo):
-        resposta = requests.get(self.REMOTIVE_URL, params={"search": termo, "limit": 100}, timeout=20)
-        resposta.raise_for_status()
-        vagas = []
-        for vaga in resposta.json().get("jobs", []):
-            vagas.append({
-                "titulo": vaga.get("title", "Vaga sem título"),
-                "empresa": vaga.get("company_name", "Empresa não informada"),
-                "localizacao": vaga.get("candidate_required_location", "Remoto"),
-                "url": vaga.get("url", ""),
-                "descricao": JobMatchService.limpar_descricao(vaga.get("description", "")),
-                "tags": vaga.get("tags", []) or [],
-                "fonte": "Remotive",
-            })
-        return vagas
-
-    def _arbeitnow(self):
-        resposta = requests.get(self.ARBEITNOW_URL, timeout=20)
-        resposta.raise_for_status()
-        vagas = []
-        for vaga in resposta.json().get("data", []):
-            localizacao = "Remoto" if vaga.get("remote") else (vaga.get("location") or "Não informado")
-            vagas.append({
-                "titulo": vaga.get("title", "Vaga sem título"),
-                "empresa": vaga.get("company_name", "Empresa não informada"),
-                "localizacao": localizacao,
-                "url": vaga.get("url", ""),
-                "descricao": JobMatchService.limpar_descricao(vaga.get("description", "")),
-                "tags": vaga.get("tags", []) or [],
-                "fonte": "Arbeitnow",
-            })
-        return vagas
-
     @staticmethod
     def _deduplicar(vagas):
         """Combina resultados equivalentes preservando o registro mais completo."""
@@ -202,20 +133,39 @@ class JobSearchService:
         title = normalize_text(vaga.title)
         content = normalize_text(" ".join((vaga.title, vaga.description, " ".join(vaga.tags))))
         matches = sum(term in content for term in terms)
-        score = min(45, matches * 9)
-        if any(term in title for term in terms):
-            score += 25
+        skills_score = min(40, matches * 8)
+        title_score = 25 if any(term in title for term in terms) else 0
+        location_score = 0
+        score = skills_score + title_score
         if cidade and normalize_text(cidade) in normalize_text(vaga.location):
-            score += 15
+            location_score = 15
         elif estado and normalize_text(estado) in normalize_text(vaga.location):
-            score += 10
+            location_score = 10
         elif "brasil" in normalize_text(vaga.location) or "brazil" in normalize_text(vaga.location):
-            score += 5
-        if modalidade and normalize_text(modalidade) in normalize_text(vaga.modality):
-            score += 8
-        if senioridade and normalize_text(senioridade) in content:
-            score += 7
-        return min(100, score)
+            location_score = 5
+        modality_score = 7 if modalidade and normalize_text(modalidade) in normalize_text(vaga.modality) else 0
+        seniority_score = 8 if senioridade and normalize_text(senioridade) in content else 0
+        recency_score = cls._pontuacao_recencia(vaga.published_at)
+        score += location_score + modality_score + seniority_score + recency_score
+        explanation = (
+            f"Competências {skills_score}/40 • cargo {title_score}/25 • "
+            f"localização {location_score}/15 • modalidade {modality_score}/7 • "
+            f"senioridade {seniority_score}/8 • recência {recency_score}/5"
+        )
+        return min(100, score), explanation
+
+    @staticmethod
+    def _pontuacao_recencia(value):
+        if not value:
+            return 0
+        try:
+            published = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            if published.tzinfo is None:
+                published = published.replace(tzinfo=timezone.utc)
+            days = (datetime.now(timezone.utc) - published).days
+            return 5 if days <= 30 else (2 if days <= 90 else 0)
+        except (TypeError, ValueError):
+            return 0
 
     def buscar(
         self, termo, limite=25, estado="", cidade="", modalidade="", senioridade="",
@@ -233,10 +183,24 @@ class JobSearchService:
         )
         candidates, errors = [], []
         for provider in self.providers:
+            started = time.perf_counter()
             try:
-                candidates.extend(provider.search(termo))
-            except (requests.RequestException, ValueError, KeyError) as error:
+                provider_results = provider.search(termo)
+                candidates.extend(provider_results)
+                eligible = sum(
+                    self._localizacao_elegivel(item.location, estado, cidade)
+                    for item in provider_results
+                )
+                self.db.registrar_metrica_provedor(
+                    search_id, provider.name, len(provider_results), eligible,
+                    round((time.perf_counter() - started) * 1000),
+                )
+            except (requests.RequestException, ValueError, KeyError, TypeError) as error:
                 errors.append(f"{provider.name}: {error}")
+                self.db.registrar_metrica_provedor(
+                    search_id, provider.name, duration_ms=round((time.perf_counter() - started) * 1000),
+                    error=str(error),
+                )
         if not candidates:
             self.db.concluir_busca_vagas(search_id, 0)
             detail = "; ".join(errors) or "nenhum resultado publicado"
@@ -255,13 +219,13 @@ class JobSearchService:
             content = normalize_text(f"{listing.title} {' '.join(listing.tags)} {listing.description}")
             adherence = sum(normalize_text(item) in content for item in query_terms)
             if listing.description and adherence >= minimum_terms:
-                listing.rank_score = self._ranking(
+                listing.rank_score, listing.rank_explanation = self._ranking(
                     listing, terms, estado, cidade, modalidade, senioridade
                 )
                 results.append(listing)
         results.sort(key=lambda item: (item.rank_score, len(item.description)), reverse=True)
         output = []
-        for position, listing in enumerate(results[:limite], start=1):
+        for position, listing in enumerate(results, start=1):
             item = listing.as_dict()
             listing_id, decision = self.db.salvar_vaga_encontrada(item, search_id, position)
             if decision == "descartada":
@@ -269,6 +233,8 @@ class JobSearchService:
             item["id"] = listing_id
             item["decision"] = decision
             output.append(item)
+            if len(output) >= limite:
+                break
         self.db.concluir_busca_vagas(search_id, len(output))
         return output
 
@@ -305,11 +271,23 @@ class JobSearchService:
         for item in [*habilidades, *perfil["palavras_mercado"]]:
             if item.lower() not in {palavra.lower() for palavra in palavras}:
                 palavras.append(item)
+        custom_titles = [
+            item.strip() for item in os.getenv("JOB_TARGET_TITLES", "").split(",") if item.strip()
+        ]
+        titles = list(dict.fromkeys([*custom_titles, *perfil["titulos"]]))
+        source_queries = list(dict.fromkeys([*custom_titles, *perfil["consultas_fontes"]]))
+        proven = habilidades[:12]
+        suggested = [
+            item for item in perfil["palavras_mercado"]
+            if item.casefold() not in {skill.casefold() for skill in habilidades}
+        ][:12]
         return {
             "principal": perfil["principal"],
-            "titulos": perfil["titulos"],
+            "titulos": titles,
             "palavras_chave": palavras[:12],
-            "consultas_fontes": perfil["consultas_fontes"],
+            "competencias_comprovadas": proven,
+            "palavras_sugeridas": suggested,
+            "consultas_fontes": source_queries,
         }
 
     def termo_para_curriculo(self):

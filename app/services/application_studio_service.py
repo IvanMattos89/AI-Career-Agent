@@ -60,6 +60,7 @@ Descrição: {descricao}""".format(
             "palavras_chave": [str(x) for x in pacote.get("palavras_chave", []) if str(x).strip()],
             "checklist": [str(x) for x in pacote.get("checklist", []) if str(x).strip()],
             "vaga": vaga["titulo"], "empresa": vaga["empresa"] or "",
+            "resume_id": analise["resume_id"],
         }
         pacote["id"] = self.db.salvar_pacote_candidatura(oportunidade_id, pacote)
         return pacote

@@ -7,7 +7,7 @@ Aplicação desktop para analisar currículos, encontrar vagas brasileiras, comp
 - Importação assíncrona de currículos PDF e DOCX.
 - Análise ATS com Ollama, OpenAI mediante consentimento e fallback local.
 - Currículo ativo explícito para buscas e comparações.
-- Busca unificada em Vagas.com, Remotive, Arbeitnow e boards públicos Greenhouse/Lever.
+- Busca unificada em Vagas.com, Remotive, Gupy, Adzuna, Jooble e boards públicos Greenhouse/Lever.
 - Filtros por cargo, estado, cidade, modalidade e senioridade, com ranking personalizado.
 - Deduplicação entre fontes e decisões persistentes para favoritar ou descartar vagas.
 - Job Match individual ou em lote, com histórico persistente.
@@ -15,6 +15,7 @@ Aplicação desktop para analisar currículos, encontrar vagas brasileiras, comp
 - Conversão de uma vaga encontrada em candidatura com um clique.
 - Pipeline com etapas, contatos, salário, prazo, próxima ação e histórico de alterações.
 - Dashboard com taxa de retorno, entrevistas, fonte eficiente e alertas de acompanhamento.
+- Configurações organizadas por IA, fontes e privacidade, com diagnóstico e backup consistente do SQLite.
 - Exclusão completa da cópia interna do currículo e dados relacionados.
 
 ## Instalação
@@ -49,7 +50,22 @@ separados por vírgula. Eles também podem ser definidos no `.env`:
 ```dotenv
 JOB_GREENHOUSE_BOARDS=empresa-a,empresa-b
 JOB_LEVER_SITES=empresa-a,empresa-b
+JOB_ENABLE_ARBEITNOW=false
+JOB_TARGET_TITLES=Analista Fiscal Sênior,Especialista Fiscal
+GUPY_API_TOKEN=
+ADZUNA_APP_ID=
+ADZUNA_APP_KEY=
+JOOBLE_API_KEY=
 ```
+
+O Arbeitnow fica desativado por padrão porque a maioria de suas vagas remotas não declara
+elegibilidade específica para o Brasil. A tela **Configurações** mostra recebidas, elegíveis no
+Brasil e falhas por provedor.
+
+A API da Gupy consulta somente as vagas da organização associada ao token. Greenhouse e Lever
+também são APIs por empresa, portanto os respectivos identificadores precisam ser informados.
+Adzuna e Jooble exigem cadastro próprio para emissão das chaves. LinkedIn e Indeed permanecem
+como pesquisas abertas no navegador; o aplicativo não realiza scraping nem automatiza login.
 
 ## Privacidade
 
@@ -57,6 +73,8 @@ JOB_LEVER_SITES=empresa-a,empresa-b
 - OpenAI e Ollama remoto exigem consentimento explícito em **Configurações**.
 - Currículos, banco, relatórios, logs e `.env` são ignorados pelo Git.
 - A exclusão de um currículo remove banco, análises, matches e a cópia gerenciada pelo app; o arquivo original permanece intacto.
+- Candidaturas, históricos e materiais de candidatura vinculados ao currículo também são removidos. Pacotes legados sem vínculo identificável são apagados por segurança.
+- O armazenamento é local, mas não é criptografado em repouso. Proteja a conta do Windows e o acesso à pasta `data/`.
 
 ## Desenvolvimento
 

@@ -20,7 +20,3 @@ class HistoryService:
 
     def excluir_analise(self, resume_id):
         self.db.excluir_analise(resume_id)
-
-    def remover_curriculo(self, resume_id):
-        self.db.excluir_analise(resume_id)
-        self.db.excluir_curriculo(resume_id)

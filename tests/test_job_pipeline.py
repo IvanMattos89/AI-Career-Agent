@@ -7,6 +7,7 @@ import requests
 
 from app.database.sqlite_db import Database
 from app.models.job_listing import JobListing
+from app.services.job_providers import matches_query
 from app.services.job_search_service import JobSearchService
 
 
@@ -69,6 +70,24 @@ class JobPipelineTest(unittest.TestCase):
         self.db.definir_decisao_vaga(result[0]["id"], "descartada")
         self.assertEqual(service.buscar("Analista Fiscal", estado="SP"), [])
 
+    def test_discarded_results_do_not_reduce_requested_limit(self):
+        jobs = [
+            JobListing(
+                title="Analista Fiscal", company=f"Empresa {index}", location="Brasil",
+                description="Analista Fiscal com ICMS e SPED. " + ("detalhes " * (4 - index)),
+                provider="Teste",
+            )
+            for index in range(3)
+        ]
+        service = JobSearchService(providers=[FakeProvider("Teste", jobs)], db=self.db)
+        first = service.buscar("Analista Fiscal", limite=2)
+        self.db.definir_decisao_vaga(first[0]["id"], "descartada")
+
+        second = service.buscar("Analista Fiscal", limite=2)
+
+        self.assertEqual(len(second), 2)
+        self.assertNotIn(first[0]["id"], {item["id"] for item in second})
+
     def test_converts_listing_to_application_and_tracks_status(self):
         listing = JobListing(
             title="Analista Fiscal", company="Empresa Y", location="Curitiba / PR",
@@ -93,6 +112,30 @@ class JobPipelineTest(unittest.TestCase):
         self.assertEqual(metrics["total"], 1)
         self.assertEqual(metrics["acompanhamentos"], 1)
 
+    def test_resume_deletion_removes_linked_application_and_material(self):
+        resume_id = self.db.salvar_curriculo("cv.docx", "cv.docx", "Currículo fiscal")
+        listing = JobListing(
+            title="Analista Fiscal", company="Empresa P", location="Brasil",
+            description="ICMS e SPED", provider="Teste",
+        ).as_dict()
+        listing_id, _ = self.db.salvar_vaga_encontrada(listing)
+        application_id = self.db.converter_vaga_em_candidatura(listing_id)
+        self.db.salvar_pacote_candidatura(application_id, {
+            "resume_id": resume_id,
+            "carta": "conteúdo derivado", "resumo_direcionado": "resumo",
+            "palavras_chave": [], "checklist": [],
+        })
+
+        self.db.excluir_curriculo(resume_id)
+
+        self.assertIsNone(self.db.obter_oportunidade(application_id))
+        self.assertEqual(
+            self.db.conn.execute("SELECT COUNT(*) FROM application_packages").fetchone()[0], 0
+        )
+        self.assertEqual(
+            self.db.conn.execute("SELECT COUNT(*) FROM application_history").fetchone()[0], 0
+        )
+
     def test_provider_failure_does_not_hide_results_from_other_sources(self):
         valid = JobListing(
             title="Analista Fiscal", company="Empresa Z", location="Brasil",
@@ -106,6 +149,15 @@ class JobPipelineTest(unittest.TestCase):
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["empresa"], "Empresa Z")
+        metrics = self.db.metricas_provedores()
+        self.assertEqual({item["provider"] for item in metrics}, {"Indisponível", "Fonte pública"})
+        latest = self.db.resumo_ultima_busca()
+        self.assertEqual(latest["search"]["result_count"], 1)
+        self.assertEqual(len(latest["providers"]), 2)
+
+    def test_fiscal_ontology_accepts_equivalent_titles(self):
+        self.assertTrue(matches_query("Analista Fiscal", "Indirect Tax Analyst - Brazil"))
+        self.assertTrue(matches_query("tax accountant", "Consultor SAP Fiscal"))
 
 
 if __name__ == "__main__":

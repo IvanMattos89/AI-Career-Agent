@@ -141,13 +141,18 @@ class HistoryPage(QWidget):
 
         resposta = QMessageBox.question(
             self,
-            "Excluir",
-            "Deseja excluir este currículo?"
+            "Excluir currículo e dados derivados",
+            "Esta ação removerá a cópia interna do currículo, análises, Job Matches, "
+            "candidaturas vinculadas e materiais gerados. O arquivo original não será apagado.\n\n"
+            "Deseja continuar?"
         )
 
         if resposta == QMessageBox.Yes:
             self.service.excluir_curriculo(resume_id)
             self.carregar_curriculos()
+            QMessageBox.information(
+                self, "Exclusão concluída", "O currículo e seus dados derivados foram removidos."
+            )
 
     def definir_curriculo_ativo(self):
         linha = self.tabela.currentRow()

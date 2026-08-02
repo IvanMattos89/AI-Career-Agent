@@ -45,6 +45,31 @@ def application_stylesheet():
         border-radius: 12px; padding: 14px;
     }}
     QLabel#mutedText {{ color: {TEXT_SECONDARY}; }}
+    QLabel#settingsFeedback {{
+        background: #F8FAFC; color: {TEXT_SECONDARY}; border: 1px solid {BORDER};
+        border-radius: 10px; padding: 11px 14px;
+    }}
+    QLabel#settingsFeedback[state="success"] {{ background: #F0FDF4; color: #166534; border-color: #BBF7D0; }}
+    QLabel#settingsFeedback[state="error"] {{ background: #FEF2F2; color: #991B1B; border-color: #FECACA; }}
+    QLabel#settingsSummary {{
+        background: {PRIMARY_SOFT}; color: #1E3A8A; border: 1px solid #BFDBFE;
+        border-radius: 12px; padding: 14px;
+    }}
+    QLabel#serviceStatus {{ border-radius: 9px; padding: 8px 12px; background: #F1F5F9; color: {TEXT_SECONDARY}; }}
+    QLabel#serviceStatus[state="success"] {{ background: #DCFCE7; color: #166534; }}
+    QLabel#serviceStatus[state="warning"] {{ background: #FFF7ED; color: #9A3412; }}
+    QLabel#serviceStatus[state="error"] {{ background: #FEE2E2; color: #991B1B; }}
+    QFrame#settingsMetric {{
+        background: {CARD_BACKGROUND}; border: 1px solid {BORDER};
+        border-radius: 12px; min-height: 84px;
+    }}
+    QFrame#settingsMetric QLabel {{ border: none; background: transparent; }}
+    QLabel#metricLabel {{ color: {TEXT_SECONDARY}; font-size: 12px; font-weight: 600; }}
+    QLabel#metricValue {{ color: {TEXT}; font-size: 20px; font-weight: 750; }}
+    QLabel#privacyNotice {{
+        background: #FFFBEB; color: #92400E; border: 1px solid #FDE68A;
+        border-radius: 10px; padding: 13px;
+    }}
     QScrollArea, QStackedWidget {{
         background: transparent;
         border: none;

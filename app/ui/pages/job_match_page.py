@@ -97,9 +97,14 @@ class JobMatchPage(QWidget):
         self.btnLinkedIn.clicked.connect(lambda: self.abrir_pesquisa_externa("LinkedIn"))
         self.btnIndeed = QPushButton("Indeed")
         self.btnIndeed.clicked.connect(lambda: self.abrir_pesquisa_externa("Indeed"))
+        self.btnGupy = QPushButton("Gupy")
+        self.btnGupy.clicked.connect(lambda: self.abrir_pesquisa_externa("Gupy"))
         self.btnAbrirVaga = QPushButton("Abrir vaga selecionada")
         self.btnAbrirVaga.clicked.connect(self.abrir_vaga_selecionada)
-        for botao in (self.btnBuscarPerfil, self.btnGoogle, self.btnLinkedIn, self.btnIndeed, self.btnAbrirVaga):
+        for botao in (
+            self.btnBuscarPerfil, self.btnGoogle, self.btnLinkedIn, self.btnIndeed,
+            self.btnGupy, self.btnAbrirVaga,
+        ):
             botao.setProperty("secondary", True)
         busca.addWidget(self.txtBusca)
         busca.addWidget(self.cmbEstado)
@@ -113,7 +118,9 @@ class JobMatchPage(QWidget):
         acoes_busca.addStretch()
         layout.addLayout(acoes_busca)
         fontes_externas = QHBoxLayout()
-        for botao in (self.btnGoogle, self.btnLinkedIn, self.btnIndeed, self.btnAbrirVaga):
+        for botao in (
+            self.btnGoogle, self.btnLinkedIn, self.btnIndeed, self.btnGupy, self.btnAbrirVaga,
+        ):
             fontes_externas.addWidget(botao)
         fontes_externas.addStretch()
         layout.addLayout(fontes_externas)
@@ -141,6 +148,10 @@ class JobMatchPage(QWidget):
         decisoes.addWidget(self.btnCandidatura)
         decisoes.addStretch()
         layout.addLayout(decisoes)
+        self.resumo_fontes = QLabel("As métricas de cada fonte aparecerão após a busca.")
+        self.resumo_fontes.setObjectName("mutedText")
+        self.resumo_fontes.setWordWrap(True)
+        layout.addWidget(self.resumo_fontes)
         self.btnCompararTodas = QPushButton("Comparar todas as vagas encontradas")
         self.btnCompararTodas.setEnabled(False)
         self.btnCompararTodas.clicked.connect(self.comparar_todas)
@@ -224,13 +235,15 @@ class JobMatchPage(QWidget):
         skills = [item.strip() for item in (analise["hard_skills"] or "").split(";") if item.strip()]
         destaque = ", ".join(skills[:6]) or "competências não identificadas"
         titulos = " · ".join(recomendacao["titulos"][:4]) or recomendacao["principal"]
-        palavras = ", ".join(recomendacao["palavras_chave"][:10]) or destaque
+        comprovadas = ", ".join(recomendacao.get("competencias_comprovadas", [])[:10]) or destaque
+        sugeridas = ", ".join(recomendacao.get("palavras_sugeridas", [])[:8]) or "Nenhuma sugestão adicional"
         self.perfil_ativo.setText(
             f"<b>Currículo ativo:</b> {analise['nome_arquivo']} &nbsp; | &nbsp; "
             f"<b>Perfil:</b> {analise['cargo'] or 'Não identificado'} &nbsp; | &nbsp; "
             f"<b>Busca recomendada (Brasil):</b> {recomendacao['principal']}<br>"
             f"<b>Títulos relacionados:</b> {titulos}<br>"
-            f"<b>Palavras-chave para a vaga:</b> {palavras}"
+            f"<b>Competências comprovadas:</b> {comprovadas}<br>"
+            f"<b>Termos sugeridos para pesquisar (não comprovam experiência):</b> {sugeridas}"
         )
         self.btnBuscarPerfil.setEnabled(True)
 
@@ -311,10 +324,13 @@ class JobMatchPage(QWidget):
             self.resultados_busca.setItem(linha, 1, QTableWidgetItem(vaga["empresa"]))
             self.resultados_busca.setItem(linha, 2, QTableWidgetItem(vaga["localizacao"]))
             self.resultados_busca.setItem(linha, 3, QTableWidgetItem(vaga["fonte"]))
-            self.resultados_busca.setItem(linha, 4, QTableWidgetItem(f"{vaga.get('rank_score', 0)}%"))
+            ranking = QTableWidgetItem(f"{vaga.get('rank_score', 0)}%")
+            ranking.setToolTip(vaga.get("rank_explanation", "Ranking calculado pelo perfil e filtros."))
+            self.resultados_busca.setItem(linha, 4, ranking)
             self.resultados_busca.setItem(linha, 5, QTableWidgetItem(vaga.get("decision", "nova").title()))
             self.resultados_busca.setItem(linha, 6, QTableWidgetItem("Pendente"))
         self.btnCompararTodas.setEnabled(bool(vagas))
+        self._mostrar_metricas_fontes()
         if not vagas:
             self.status.setText(
                 "Nenhuma vaga no Brasil encontrada nas fontes públicas integradas para esse filtro. "
@@ -325,6 +341,27 @@ class JobMatchPage(QWidget):
                 f"{len(vagas)} vagas únicas encontradas e ordenadas pelo seu perfil. "
                 "Você pode favoritar, descartar ou criar uma candidatura."
             )
+
+    def _mostrar_metricas_fontes(self):
+        summary = self.db.resumo_ultima_busca()
+        if not summary:
+            self.resumo_fontes.setText("Nenhuma métrica de busca disponível.")
+            return
+        parts = []
+        for metric in summary["providers"]:
+            received = metric["received"] or 0
+            eligible = metric["eligible_brazil"] or 0
+            filtered = max(0, received - eligible)
+            status = "falhou" if metric["error"] else f"{metric['duration_ms']} ms"
+            parts.append(
+                f"<b>{metric['provider']}</b>: {received} recebidas, {eligible} Brasil, "
+                f"{filtered} filtradas ({status})"
+            )
+        text = " &nbsp; • &nbsp; ".join(parts) or "Nenhum provedor habilitado respondeu."
+        self.resumo_fontes.setText(
+            f"{text}<br><b>Exibidas:</b> {summary['search']['result_count']} &nbsp; • &nbsp; "
+            f"<b>Descartadas pelo usuário:</b> {summary['discarded']}"
+        )
 
     def _vaga_selecionada(self):
         linha = self.resultados_busca.currentRow()
@@ -349,6 +386,7 @@ class JobMatchPage(QWidget):
         self.db.definir_decisao_vaga(vaga["id"], "descartada")
         self.vagas_encontradas.pop(linha)
         self.resultados_busca.removeRow(linha)
+        self._mostrar_metricas_fontes()
         self.status.setText("Vaga descartada. Ela não aparecerá novamente nas próximas buscas.")
 
     def converter_em_candidatura(self):
@@ -402,6 +440,7 @@ class JobMatchPage(QWidget):
             "Google": f"https://www.google.com/search?q={consulta}",
             "LinkedIn": f"https://www.linkedin.com/jobs/search/?keywords={quote_plus(termo)}&location={quote_plus(local)}",
             "Indeed": f"https://br.indeed.com/jobs?q={quote_plus(termo)}&l={quote_plus(local)}",
+            "Gupy": f"https://www.google.com/search?q=site%3Agupy.io%2Fjobs+{consulta}",
         }
         QDesktopServices.openUrl(QUrl(urls[fonte]))
         self.status.setText(f"Pesquisa aberta em {fonte} para: {termo} — {local}.")

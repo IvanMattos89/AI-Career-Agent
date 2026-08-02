@@ -39,6 +39,7 @@ class JobListing:
     salary: str = ""
     published_at: str = ""
     rank_score: int = 0
+    rank_explanation: str = ""
     decision: str = "nova"
     id: int | None = None
 

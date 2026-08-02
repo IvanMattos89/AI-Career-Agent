@@ -28,6 +28,8 @@ class JobSearchRecommendationTest(unittest.TestCase):
         self.assertEqual(resultado["principal"], "Analista Fiscal")
         self.assertIn("Analista Tributário", resultado["titulos"])
         self.assertIn("SPED Fiscal", resultado["palavras_chave"])
+        self.assertIn("ICMS", resultado["competencias_comprovadas"])
+        self.assertIn("SPED Fiscal", resultado["palavras_sugeridas"])
         self.assertEqual(resultado["consultas_fontes"], ["tax accountant", "accountant"])
 
     @patch("app.services.job_search_service.Database.obter_analise_ativa")

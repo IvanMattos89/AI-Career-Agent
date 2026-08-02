@@ -162,7 +162,8 @@ class CareerHubPage(QWidget):
         habilidades = [x.strip() for x in (analise["hard_skills"] or "").split(";") if x.strip()]
         faltantes = [x.strip() for x in (analise["competencias_faltantes"] or "").split(";") if x.strip()]
         titulos = " · ".join(recomendacao["titulos"][:4])
-        palavras = ", ".join(recomendacao["palavras_chave"][:10])
+        comprovadas = ", ".join(recomendacao.get("competencias_comprovadas", [])[:10])
+        sugeridas = ", ".join(recomendacao.get("palavras_sugeridas", [])[:8])
         self.perfil_resumo.setText(
             f"<b>Perfil ativo:</b> {analise['cargo'] or 'Não identificado'} &nbsp; | &nbsp; "
             f"<b>Área:</b> {analise['area'] or 'Não identificada'} &nbsp; | &nbsp; "
@@ -170,7 +171,8 @@ class CareerHubPage(QWidget):
             f"<b>Busca recomendada (Brasil):</b> {recomendacao['principal']}<br>"
             f"<b>Títulos relacionados:</b> {titulos}<br>"
             f"<b>Competências identificadas:</b> {', '.join(habilidades[:8]) or 'Não identificadas'}<br>"
-            f"<b>Palavras-chave para vagas:</b> {palavras}<br>"
+            f"<b>Competências comprovadas:</b> {comprovadas or 'Não identificadas'}<br>"
+            f"<b>Termos de mercado sugeridos:</b> {sugeridas or 'Nenhuma sugestão adicional'}<br>"
             f"<b>Para desenvolver:</b> {', '.join(faltantes[:4]) or 'Revise as recomendações da análise'}"
         )
         if hasattr(self, "btn_busca_integrada"):

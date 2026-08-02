@@ -88,7 +88,7 @@ class ResumeAnalyzer:
 
     @staticmethod
     def _anos_experiencia(texto):
-        anos = [int(valor) for valor in re.findall(r"(?<!\\d)(\\d{1,2})\\s*\\+?\\s*anos?", texto)]
+        anos = [int(valor) for valor in re.findall(r"(?<!\d)(\d{1,2})\s*\+?\s*anos?", texto)]
         return max(anos, default=0)
 
     @staticmethod

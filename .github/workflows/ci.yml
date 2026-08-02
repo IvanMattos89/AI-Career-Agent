@@ -25,6 +25,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
+      - name: Validate clean installation
+        run: |
+          python -m pip check
+          python -m compileall -q app
+          python -c "from app.main import main; from app.database.sqlite_db import Database; db = Database(); db.close(); print('clean install ok')"
+
       - name: Ruff
         run: python -m ruff check .
 
@@ -32,4 +38,4 @@ jobs:
         run: python -m mypy app
 
       - name: Pytest
-        run: python -m pytest
+        run: python -m pytest --cov=app --cov-report=term --cov-fail-under=55

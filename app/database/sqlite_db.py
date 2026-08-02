@@ -24,6 +24,32 @@ class Database:
             self.conn.close()
             self.conn = None
 
+    def diagnostico(self):
+        """Retorna informações seguras para a tela de diagnóstico local."""
+        integrity = self.conn.execute("PRAGMA integrity_check").fetchone()[0]
+        version = self.conn.execute(
+            "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"
+        ).fetchone()[0]
+        return {
+            "integridade": integrity,
+            "migracao": int(version or 0),
+            "tamanho_bytes": DATABASE.stat().st_size if DATABASE.exists() else 0,
+        }
+
+    def criar_backup(self, destination):
+        """Cria uma cópia SQLite consistente mesmo com a aplicação aberta."""
+        target = Path(destination).resolve()
+        source = DATABASE.resolve()
+        if target == source:
+            raise ValueError("Escolha um arquivo diferente do banco em uso.")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        backup = sqlite3.connect(target)
+        try:
+            self.conn.backup(backup)
+        finally:
+            backup.close()
+        return target
+
     def __enter__(self):
         return self
 
@@ -262,6 +288,12 @@ class Database:
                 "INSERT INTO schema_migrations(version, name) VALUES(1, ?)",
                 ("busca_normalizada_e_pipeline",),
             )
+        if 2 not in aplicadas:
+            self._migracao_privacidade_e_metricas(cursor)
+            cursor.execute(
+                "INSERT INTO schema_migrations(version, name) VALUES(2, ?)",
+                ("privacidade_derivados_e_metricas_provedores",),
+            )
 
     @staticmethod
     def _migracao_busca_e_pipeline(cursor):
@@ -345,6 +377,36 @@ class Database:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_job_listings_decision ON job_listings(decision)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_opportunities_status ON opportunities(status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_opportunities_next_action ON opportunities(next_action_at)")
+
+    def _migracao_privacidade_e_metricas(self, cursor):
+        package_columns = {row[1] for row in cursor.execute("PRAGMA table_info(application_packages)")}
+        if "resume_id" not in package_columns:
+            cursor.execute("ALTER TABLE application_packages ADD COLUMN resume_id INTEGER")
+        # Pacotes legados foram produzidos com o currículo ativo da época. Se
+        # ainda houver apenas um currículo, a associação pode ser recuperada.
+        resumes = cursor.execute("SELECT id FROM resumes").fetchall()
+        if len(resumes) == 1:
+            cursor.execute(
+                "UPDATE application_packages SET resume_id=? WHERE resume_id IS NULL",
+                (resumes[0]["id"],),
+            )
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS provider_search_metrics(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                search_id INTEGER,
+                provider TEXT NOT NULL,
+                received INTEGER NOT NULL DEFAULT 0,
+                eligible_brazil INTEGER NOT NULL DEFAULT 0,
+                duration_ms INTEGER NOT NULL DEFAULT 0,
+                error TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(search_id) REFERENCES job_searches(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_provider_metrics_name "
+            "ON provider_search_metrics(provider, created_at)"
+        )
 
        
     # ==========================================================
@@ -438,6 +500,30 @@ class Database:
             # Bancos criados antes da migration usavam FK sem CASCADE em
             # resume_analysis. A limpeza explícita mantém a exclusão segura
             # tanto para esses bancos quanto para instalações novas.
+            linked_opportunities = cursor.execute(
+                "SELECT id FROM opportunities WHERE resume_id = ?", (resume_id,)
+            ).fetchall()
+            linked_ids = [row["id"] for row in linked_opportunities]
+            if linked_ids:
+                placeholders = ",".join("?" for _ in linked_ids)
+                cursor.execute(
+                    f"DELETE FROM application_packages WHERE opportunity_id IN ({placeholders})",
+                    linked_ids,
+                )
+                cursor.execute(
+                    f"DELETE FROM application_history WHERE opportunity_id IN ({placeholders})",
+                    linked_ids,
+                )
+                cursor.execute(
+                    f"DELETE FROM opportunities WHERE id IN ({placeholders})",
+                    linked_ids,
+                )
+            # Pacotes antigos não possuíam resume_id. Como não é possível
+            # provar a qual currículo pertencem, são apagados por privacidade.
+            cursor.execute(
+                "DELETE FROM application_packages WHERE resume_id = ? OR resume_id IS NULL",
+                (resume_id,),
+            )
             cursor.execute("DELETE FROM job_matches WHERE resume_id = ?", (resume_id,))
             cursor.execute("DELETE FROM resume_analysis WHERE resume_id = ?", (resume_id,))
             cursor.execute("DELETE FROM resumes WHERE id = ?", (resume_id,))
@@ -588,6 +674,47 @@ class Database:
             (int(result_count), search_id),
         )
         self.conn.commit()
+
+    def registrar_metrica_provedor(
+        self, search_id, provider, received=0, eligible_brazil=0, duration_ms=0, error=""
+    ):
+        self.conn.execute("""
+            INSERT INTO provider_search_metrics(
+                search_id, provider, received, eligible_brazil, duration_ms, error
+            ) VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            search_id, provider, int(received), int(eligible_brazil), int(duration_ms), error or None,
+        ))
+        self.conn.commit()
+
+    def metricas_provedores(self, limite=10):
+        return self.conn.execute("""
+            SELECT provider, COUNT(*) AS consultas, SUM(received) AS recebidas,
+                   SUM(eligible_brazil) AS brasil,
+                   ROUND(AVG(duration_ms), 0) AS tempo_medio_ms,
+                   SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) AS falhas
+            FROM provider_search_metrics
+            GROUP BY provider
+            ORDER BY brasil DESC, recebidas DESC
+            LIMIT ?
+        """, (limite,)).fetchall()
+
+    def resumo_ultima_busca(self):
+        search = self.conn.execute(
+            "SELECT * FROM job_searches ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if not search:
+            return None
+        providers = self.conn.execute("""
+            SELECT provider, received, eligible_brazil, duration_ms, error
+            FROM provider_search_metrics WHERE search_id=? ORDER BY eligible_brazil DESC, provider
+        """, (search["id"],)).fetchall()
+        discarded = self.conn.execute("""
+            SELECT COUNT(*) FROM job_search_results result
+            JOIN job_listings listing ON listing.id=result.listing_id
+            WHERE result.search_id=? AND listing.decision='descartada'
+        """, (search["id"],)).fetchone()[0]
+        return {"search": search, "providers": providers, "discarded": discarded}
 
     def salvar_vaga_encontrada(self, vaga, search_id=None, position=0):
         """Insere ou atualiza uma vaga normalizada sem perder decisões do usuário."""
@@ -823,14 +950,20 @@ class Database:
         return cursor.lastrowid
 
     def salvar_pacote_candidatura(self, oportunidade_id, pacote):
+        oportunidade = self.obter_oportunidade(oportunidade_id)
+        resume_id = pacote.get("resume_id") or (
+            oportunidade["resume_id"] if oportunidade and oportunidade["resume_id"] else self.obter_curriculo_ativo_id()
+        )
         cursor = self.conn.cursor()
         cursor.execute("""
-            INSERT INTO application_packages (opportunity_id, carta, resumo_direcionado, palavras_chave, checklist)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO application_packages (
+                opportunity_id, carta, resumo_direcionado, palavras_chave, checklist, resume_id
+            ) VALUES (?, ?, ?, ?, ?, ?)
         """, (
             oportunidade_id, pacote["carta"], pacote["resumo_direcionado"],
             json.dumps(pacote["palavras_chave"], ensure_ascii=False),
             json.dumps(pacote["checklist"], ensure_ascii=False),
+            resume_id,
         ))
         self.conn.commit()
         return cursor.lastrowid
