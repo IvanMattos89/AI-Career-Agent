@@ -2,6 +2,17 @@
 
 Aplicação desktop para analisar currículos, encontrar vagas brasileiras, comparar aderência e organizar candidaturas com privacidade local.
 
+## Direcionamento de carreira
+
+As [orientações do agente neste repositório](AGENTS.md) foram atualizadas em 27/09/2026.
+O [documento de referência](docs/AI_Career_Agent_atualizado.md) reúne o objetivo de
+Analista Fiscal/Tributário Sênior, a evolução para Especialista, o plano de 90 dias,
+o histórico de oportunidades e as pendências de validação. Os registros de vagas
+e remuneração são históricos, sem confirmação externa de disponibilidade atual.
+A [matriz de competências](docs/matriz_competencias.md) orienta a validação do perfil com evidências. As análises terminam em priorizar, investigar ou descartar; o plano combina frentes paralelas e revisões semanais e mensais.
+Essa aplicação documental não altera os prompts ou o banco do aplicativo desktop.
+As rotinas diárias e semanais estão documentadas; ativação e horários não foram verificados.
+
 ## Recursos
 
 - Importação assíncrona de currículos PDF e DOCX.
