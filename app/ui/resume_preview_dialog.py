@@ -45,7 +45,7 @@ class ResumePreviewDialog(QDialog):
         score = data.get("score_ats", {})
         if score:
             score_label = QLabel(
-                f"Estimativa ATS: original {score.get('antes', 0)}%  →  "
+                f"Completude documental: original {score.get('antes', 0)}%  →  "
                 f"direcionado {score.get('depois', 0)}%   |   {score.get('criterios', '')}"
             )
             score_label.setObjectName("profileBanner")

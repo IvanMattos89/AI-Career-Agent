@@ -1,4 +1,5 @@
-﻿from types import SimpleNamespace
+import json
+from types import SimpleNamespace
 
 from PySide6.QtWidgets import (
     QFrame,
@@ -68,6 +69,8 @@ class AnalysisPage(QWidget):
         self.score = ScoreCard("COMPLETUDE DOCUMENTAL")
 
         self.layout.addWidget(self.score)
+        self.avaliacao_detalhes = SectionCard("Evidências e limites das estimativas")
+        self.layout.addWidget(self.avaliacao_detalhes)
 
     # =====================================================
     # MÉTRICAS
@@ -185,6 +188,7 @@ class AnalysisPage(QWidget):
             return False
         habilidades = self._lista(registro["hard_skills"])
         analise = SimpleNamespace(
+            avaliacao=json.loads(registro["avaliacao_json"] or "{}") if "avaliacao_json" in registro.keys() else {},
             ats_score=registro["ats_score"] or 0,
             cargo=registro["cargo"] or "Não identificado",
             area=registro["area"] or "Não identificada",
@@ -217,6 +221,16 @@ class AnalysisPage(QWidget):
 
         ats = getattr(analise, "ats_score", 0)
         self.score.setScore(ats)
+        details = getattr(analise, "avaliacao", {}) or {}
+        seniority = details.get("senioridade", {})
+        completeness = details.get("completude", {})
+        evidence = [*seniority.get("evidencias_tempo", [])]
+        for key, values in seniority.get("sinais", {}).items():
+            evidence.extend(f"{key}: {value}" for value in values)
+        evidence.extend(f"{key}: {'informado' if value else 'a revisar'}"
+                        for key, value in completeness.get("secoes", {}).items())
+        evidence.extend(filter(None, [seniority.get("limitacoes"), completeness.get("limitacao")]))
+        self.avaliacao_detalhes.setItems(evidence or ["Análise antiga; reanalise o currículo para registrar as evidências."])
 
         # ---------- Cards superiores ----------
 

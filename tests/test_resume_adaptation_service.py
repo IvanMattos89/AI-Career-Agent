@@ -5,6 +5,9 @@ from app.services.resume_adaptation_service import ResumeAdaptationService
 
 
 class _Db:
+    def listar_confirmacoes_competencias(self, _resume_id):
+        return {}
+
     def obter_analise_ativa(self):
         return {
             "resume_id": 1, "nome_arquivo": "curriculo.docx", "cargo": "Analista Fiscal",
@@ -56,9 +59,9 @@ class ResumeAdaptationServiceTest(unittest.TestCase):
         )
 
         matrix = {item["requisito"]: item for item in result["matriz_evidencias"]}
-        self.assertEqual(matrix["ICMS"]["status"], "Comprovado")
-        self.assertEqual(matrix["SAP S/4HANA"]["status"], "Não comprovado")
-        self.assertEqual(matrix["inglês avançado"]["status"], "Não comprovado")
+        self.assertEqual(matrix["ICMS"]["status"], "Evidência profissional")
+        self.assertEqual(matrix["SAP S/4HANA"]["status"], "Não informado")
+        self.assertEqual(matrix["inglês avançado"]["status"], "Não informado")
         self.assertNotIn("SAP S/4HANA", result["titulo_direcionado"])
 
     def test_preserves_every_original_content_line(self):

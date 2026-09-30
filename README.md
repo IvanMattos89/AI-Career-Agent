@@ -55,22 +55,39 @@ python run.py
 
 ## Avaliações com evidências
 
-O Job Match separa menções encontradas, informações pendentes e lacunas confirmadas
-pelo usuário. Quando há pendências, a pontuação fica indisponível; informação ausente
-não é nota zero. A porcentagem disponível mede cobertura dos requisitos identificados,
-sem estimar probabilidade de contratação ou domínio profissional.
+Job Match, adaptação e assistente usam a mesma camada de evidências, baseada no texto
+original do currículo. Cada competência registra origem, trecho, tipo (experiência relatada,
+curso, menção, negativa, conflito ou ausência) e confirmação do usuário, quando existente.
+Curso ou academia FI não comprova operação, configuração ou implantação SAP. Confirmações
+de lacuna feitas no Job Match, com fonte/data, são guardadas por currículo e compartilhadas
+com os demais serviços. Uma evidência profissional continua sendo relato, sem verificação externa.
 
-Cada comparação termina em **priorizar**, **investigar** ou **descartar**, com justificativa,
-evidências textuais e próximo passo. Para priorizar ou descartar, registre na tela a revisão
-dos requisitos essenciais e condições, com fonte e data. Menções em cursos não comprovam
-implantação ou configuração. O histórico preserva a decisão; registros antigos precisam
-ser reavaliados. Relatórios DOCX/PDF incluem as pendências e a recomendação.
+O Job Match exibe um inventário de trechos obrigatórios, desejáveis, condições e itens a
+confirmar. Trechos desconhecidos não desaparecem: enquanto houver avaliação parcial ou
+competências pendentes, não há pontuação. Quando disponível, a porcentagem se refere aos
+requisitos identificados; a extração é heurística e exige revisão do anúncio integral.
+A recomendação termina em **priorizar**, **investigar** ou **descartar**, com justificativa
+e próximo passo. Priorizar ou descartar exige revisão documentada das condições pelo usuário.
+Histórico e relatórios preservam as evidências e a abrangência; registros antigos devem ser reavaliados.
 
-Na Central de Carreira, o objetivo é editável e o assistente usa até dez mensagens recentes.
-Sem avaliação válida da IA, entrevistas mostram **sem avaliação numérica**.
-O indicador antes chamado ATS passa a ser **completude documental**, uma heurística
-separada da aderência à vaga; recomendações de melhoria não aumentam essa pontuação.
-A senioridade local permanece não identificada quando faltam sinais profissionais.
+Conversas, entrevistas, objetivos e confirmações ficam vinculados ao currículo selecionado.
+Trocar o currículo limpa a conversa e a entrevista visíveis e carrega o histórico correto;
+respostas em andamento continuam vinculadas ao perfil de origem. Excluir o currículo remove
+seus registros vinculados. Registros antigos sem vínculo permanecem isolados e nunca entram
+no contexto de um perfil: o botão **Apagar conversas e entrevistas antigas sem vínculo com perfil**,
+na Central de Carreira, remove esses registros e o objetivo global legado após confirmação.
+O assistente usa até dez mensagens recentes do perfil; sem análise de currículo, solicita importação.
+
+Senioridade considera períodos profissionais (sem duplicar meses sobrepostos) e sinais de
+autonomia, complexidade e responsabilidade; dez anos isolados não bastam para Sênior.
+A tela de análise registra as evidências e limitações. A **completude documental** usa cinco
+seções de 20 pontos: identificação/contato, objetivo/resumo, trajetória declarada, formação
+e competências declaradas. Primeira oportunidade explicitada preenche trajetória; a escala
+atinge 100 sem premiar anos de experiência ou quantidade de competências. Seções não
+reconhecidas requerem revisão. Nenhuma dessas notas estima chance de contratação.
+
+As migrações preservam o histórico. Reanalise currículos antigos para obter os novos critérios
+com evidências; notas antigas não são recalculadas silenciosamente.
 
 ## Provedores configuráveis
 

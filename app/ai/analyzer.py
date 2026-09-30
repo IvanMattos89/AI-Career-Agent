@@ -1,7 +1,7 @@
 import re
 import unicodedata
-from datetime import date
 
+from app.ai.ats_score import assess as assess_completeness
 from app.ai.ats_score import calculate
 from app.ai.llm_client import LLMClient
 from app.ai.logging_config import logger
@@ -9,6 +9,7 @@ from app.ai.models import ResumeAnalysis
 from app.ai.parser import parse_resume_analysis
 from app.ai.professions import PROFESSIONS
 from app.ai.prompts import RESUME_ANALYSIS_PROMPT
+from app.ai.seniority_engine import assess as assess_seniority
 from app.ai.seniority_engine import estimate as estimar_senioridade
 from app.ai.seniority_engine import experience_years
 from app.ai.skill_detector import SkillDetector
@@ -32,7 +33,7 @@ class ResumeAnalyzer:
     def analisar(self, texto):
         try:
             prompt = RESUME_ANALYSIS_PROMPT.format(curriculo=texto)
-            return parse_resume_analysis(self.llm.perguntar(prompt))
+            return self._avaliacao_documental(parse_resume_analysis(self.llm.perguntar(prompt)), texto)
         except Exception as erro:
             # Indisponibilidade do provedor é um caminho previsto: a interface
             # continua funcional com análise local sem imprimir dados sensíveis.
@@ -49,14 +50,14 @@ class ResumeAnalyzer:
         skills = sorted(set(skills), key=str.casefold)
         idiomas = self._detectar_idiomas(texto_normalizado)
         certificacoes = self._detectar_certificacoes(texto_normalizado)
-        anos = self._anos_experiencia(texto_normalizado)
-        senioridade = estimar_senioridade(texto_normalizado)
+        anos = self._anos_experiencia(texto)
+        senioridade = estimar_senioridade(texto)
         confianca = min(0.95, 0.35 + pontos_cargo * 0.12 + min(len(skills), 8) * 0.03)
         resumo = (
             "Análise local baseada em cargos, competências e sinais de experiência encontrados no currículo. "
             "Conecte um provedor de IA para recomendações mais detalhadas."
         )
-        ats = calculate({"cargo": cargo if cargo != "Profissão não identificada" else "", "area": area if area != "Não identificada" else "", "senioridade": senioridade, "hard_skills": skills, "tecnologias": skills, "idiomas": idiomas, "certificacoes": certificacoes, "resumo": texto})
+        ats = calculate({"texto_curriculo": texto})
         recomendacoes = [
             "Inclua resultados mensuráveis nas experiências mais relevantes.",
             "Adapte o resumo profissional às palavras-chave da vaga antes de candidatar.",
@@ -65,13 +66,13 @@ class ResumeAnalyzer:
             recomendacoes.append("Descreva ferramentas, sistemas e tributos com os quais você trabalhou.")
         if not idiomas:
             recomendacoes.append("Informe idiomas e nível de proficiência quando forem relevantes para as vagas desejadas.")
-        return ResumeAnalysis(
+        return self._avaliacao_documental(ResumeAnalysis(
             cargo=cargo, area=area, confianca=round(confianca, 2), senioridade=senioridade,
             hard_skills=skills, tecnologias=skills, idiomas=idiomas, certificacoes=certificacoes,
             anos_experiencia=anos, palavras_chave=skills,
             pontos_fortes=skills[:5], recomendacoes=recomendacoes,
             resumo=resumo, ats_score=ats,
-        )
+        ), texto)
 
     @staticmethod
     def _normalizar(texto):
@@ -93,29 +94,17 @@ class ResumeAnalyzer:
 
     @staticmethod
     def _anos_experiencia(texto):
-        explicit = [experience_years(texto)]
-        intervals = []
-        current = date.today()
-        pattern = re.compile(
-            r"(?:(\d{1,2})[/-])?((?:19|20)\d{2})\s*[-–—]\s*"
-            r"(?:(?:(\d{1,2})[/-])?((?:19|20)\d{2})|(?:atual|presente))",
-            flags=re.I,
-        )
-        for match in pattern.finditer(texto):
-            start_month = min(12, max(1, int(match.group(1) or 1)))
-            start = int(match.group(2)) * 12 + start_month - 1
-            if match.group(4):
-                end_month = min(12, max(1, int(match.group(3) or 12)))
-                end = int(match.group(4)) * 12 + end_month - 1
-            else:
-                end = current.year * 12 + current.month - 1
-            if 0 <= end - start <= 60 * 12:
-                intervals.append((start, end))
-        covered: set[int] = set()
-        for start, end in intervals:
-            covered.update(range(start, end + 1))
-        calculated = len(covered) // 12
-        return max([calculated, *explicit], default=0)
+        return experience_years(texto)
+
+    @staticmethod
+    def _avaliacao_documental(result, texto):
+        seniority = assess_seniority(texto)
+        completeness = assess_completeness({"texto_curriculo": texto})
+        result.senioridade = seniority["nivel"]
+        result.anos_experiencia = seniority["anos"]
+        result.ats_score = completeness["pontuacao"]
+        result.avaliacao = {"senioridade": seniority, "completude": completeness}
+        return result
 
     @staticmethod
     def _detectar_idiomas(texto):

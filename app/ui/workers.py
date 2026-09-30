@@ -211,8 +211,9 @@ class CareerWorker(QObject):
     finished = Signal(object)
     failed = Signal(str)
 
-    def __init__(self, operacao, *args):
+    def __init__(self, operacao, *args, resume_id=None):
         super().__init__()
+        self.resume_id = resume_id
         self.operacao = operacao
         self.args = args
 
@@ -225,7 +226,7 @@ class CareerWorker(QObject):
                 service = ApplicationStudioService()
             else:
                 from app.services.career_assistant_service import CareerAssistantService
-                service = CareerAssistantService()
+                service = CareerAssistantService(resume_id=self.resume_id)
             self.finished.emit(getattr(service, self.operacao)(*self.args))
         except Exception as erro:
             self.failed.emit(str(erro))

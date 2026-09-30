@@ -32,6 +32,7 @@ class AnalysisService:
             competencias_faltantes="; ".join(analise.competencias_faltantes),
             recomendacoes="; ".join(analise.recomendacoes),
             resumo=analise.resumo,
+            avaliacao=analise.avaliacao,
         )
 
         return analise

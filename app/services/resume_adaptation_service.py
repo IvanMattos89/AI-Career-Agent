@@ -1,26 +1,25 @@
 """Adaptação verificável de currículo a uma vaga, sempre baseada em evidências."""
 
 import copy
-import html
-import json
 import re
 import unicodedata
 
-from app.ai.skill_detector import SkillDetector
+from app.ai.seniority_engine import assess as assess_seniority
 from app.database.sqlite_db import Database
+from app.services.evidence_service import (
+    MARKET_TERMS,
+    clean_description,
+    evidence_for,
+    matrix,
+    requirements,
+)
 from app.services.resume_structure_service import ResumeStructureService
 
 
 class ResumeAdaptationService:
     """Cria uma versão direcionada sem alterar fatos nem o arquivo original."""
 
-    MARKET_TERMS = (
-        "SAP S/4HANA", "SAP ECC", "Tax One", "Synchro", "Mastersaf",
-        "tributos indiretos", "compliance tributário", "obrigações acessórias",
-        "apuração de tributos", "escrituração fiscal", "legislação tributária",
-        "gestão de equipe", "liderança de equipe", "inglês avançado",
-        "inglês intermediário", "Excel avançado", "planejamento tributário",
-    )
+    MARKET_TERMS = MARKET_TERMS
     COMPETENCY_CATEGORIES = {
         "Tributos": (
             "icms", "icms st", "ipi", "pis", "cofins", "iss", "ibs", "cbs",
@@ -53,10 +52,7 @@ class ResumeAdaptationService:
 
     @staticmethod
     def _clean_description(value):
-        text = html.unescape(value or "")
-        text = re.sub(r"<script[\s\S]*?</script>|<style[\s\S]*?</style>", " ", text, flags=re.I)
-        text = re.sub(r"<[^>]+>", " ", text)
-        return re.sub(r"\s+", " ", text).strip()
+        return clean_description(value)
 
     @staticmethod
     def _contains(term, text):
@@ -66,55 +62,11 @@ class ResumeAdaptationService:
 
     @classmethod
     def _requirements(cls, description):
-        detected = list(SkillDetector().detectar(description))
-        for term in cls.MARKET_TERMS:
-            if cls._contains(term, description):
-                detected.append(term)
-        # Mantém a forma mais específica quando uma expressão já inclui outra.
-        ordered = sorted(set(detected), key=lambda item: (-len(item), item.casefold()))
-        output: list[str] = []
-        for item in ordered:
-            if any(cls._contains(item, existing) and item.casefold() != existing.casefold() for existing in output):
-                continue
-            output.append(item)
-        return output
+        return requirements(description)
 
     @classmethod
-    def _evidence_matrix(cls, description, structure):
-        lines = []
-        for section in structure.get("sections", []):
-            for item in section.get("items", []):
-                lines.append((section.get("key", "additional"), item["text"]))
-        lines.extend(("header", line) for line in structure.get("header", []))
-        matrix = []
-        normalized_description = ResumeStructureService.normalize(description)
-        for requirement in cls._requirements(description):
-            evidence = [(section, line) for section, line in lines if cls._contains(requirement, line)]
-            position = normalized_description.find(ResumeStructureService.normalize(requirement))
-            context = normalized_description[max(0, position - 70):position + len(requirement) + 70]
-            priority = "Desejável" if any(word in context for word in ("desejavel", "diferencial", "preferencial")) else "Obrigatório"
-            if evidence:
-                section, line = evidence[0]
-                source = {
-                    "experience": "Experiência profissional",
-                    "education": "Formação acadêmica",
-                    "courses": "Cursos e certificações",
-                    "technologies": "Sistemas e tecnologias",
-                    "languages": "Idiomas",
-                }.get(section, "Currículo")
-                status, action = "Comprovado", "Destacar"
-            else:
-                line, source = "Sem evidência no currículo", "Não identificado"
-                status, action = "Não comprovado", "Não incluir; confirmar com o candidato"
-            matrix.append({
-                "requisito": requirement,
-                "prioridade": priority,
-                "status": status,
-                "evidencia": line,
-                "fonte": source,
-                "acao": action,
-            })
-        return matrix
+    def _evidence_matrix(cls, description, structure, confirmations=None):
+        return matrix(description, structure, confirmations)[0]
 
     @staticmethod
     def _directed_title(analysis, job_title, aligned):
@@ -125,7 +77,9 @@ class ResumeAdaptationService:
         if target:
             elevated = any(term in target.casefold() for term in ("senior", "sênior", "especialista", "coordenador", "gerente", "consultor"))
             proven_level = any(term in seniority.casefold() for term in ("sênior", "senior", "especialista", "coordenador", "gerente", "diretor"))
-            role = target if not elevated or proven_level else current
+            changes_role = any(term in target.casefold() and term not in current.casefold()
+                               for term in ("consultor", "especialista", "coordenador", "gerente"))
+            role = target if (not elevated or proven_level) and not changes_role else current
         else:
             role = current
         suffix = " | ".join(aligned[:3])
@@ -231,7 +185,13 @@ class ResumeAdaptationService:
         technical_items = [
             item["text"] for section in technical_sections for item in section.get("items", [])
         ]
-        technical_items.extend(proven_skills)
+        declarations = [text for text in technical_items if text not in proven_skills]
+        technical_items = list(proven_skills)
+        if declarations:
+            adapted["sections"].append({
+                "key": "additional", "title": "DECLARAÇÕES DO CURRÍCULO A VALIDAR", "source_title": "",
+                "items": [{"text": text, "kind": "paragraph"} for text in declarations],
+            })
         groups = cls._group_competencies(technical_items)
         grouped_items = [
             {"text": " | ".join(values), "label": name, "kind": "competency_group"}
@@ -262,19 +222,18 @@ class ResumeAdaptationService:
         resume = self.db.obter_curriculo(analysis["resume_id"])
         if not resume:
             raise RuntimeError("O currículo original não foi encontrado no banco local.")
-        try:
-            structure = json.loads(resume["structured_json"] or "{}")
-        except (json.JSONDecodeError, TypeError):
-            structure = {}
-        if not structure.get("sections"):
-            structure = ResumeStructureService.from_text(resume["texto"])
+        structure = ResumeStructureService.from_text(resume["texto"])
 
-        matrix = self._evidence_matrix(description, structure)
-        aligned = [item["requisito"] for item in matrix if item["status"] == "Comprovado"]
-        missing = [item["requisito"] for item in matrix if item["status"] != "Comprovado"]
-        role_title = self._directed_title(analysis, titulo_vaga, aligned)
+        confirmations = self.db.listar_confirmacoes_competencias(analysis["resume_id"])
+        evidence_structure = ResumeStructureService.from_text(resume["texto"])
+        evidence_matrix, scope = matrix(description, evidence_structure, confirmations)
+        aligned = [item["requisito"] for item in evidence_matrix if item["experiencia_sustentada"]]
+        missing = [item["requisito"] for item in evidence_matrix if not item["experiencia_sustentada"]]
+        current_assessment = assess_seniority(resume["texto"])
+        verified_analysis = {**dict(analysis), "senioridade": current_assessment["nivel"]}
+        role_title = self._directed_title(verified_analysis, titulo_vaga, aligned)
         area = analysis["area"] or "sua área de atuação"
-        experience = int(analysis["anos_experiencia"] or 0)
+        experience = current_assessment["anos"]
         experience_text = f" com {experience} anos de experiência" if experience else ""
         focus = ", ".join(aligned[:5])
         summary = (
@@ -282,25 +241,13 @@ class ResumeAdaptationService:
             f"com atuação na área de {area}."
         )
         if focus:
-            summary += f" Experiência comprovada no currículo em {focus}, priorizada para esta oportunidade."
-        proven_skills = list(dict.fromkeys(
-            self._list(analysis["hard_skills"]) + self._list(analysis["tecnologias"])
-        ))
-        document = self._adapt_structure(
-            structure, summary, role_title, proven_skills
-        )
-        total_requirements = max(len(matrix), 1)
-        coverage = len(aligned) / total_requirements
-        expected_sections = {"experience", "education", "skills"}
-        original_sections = {section["key"] for section in structure.get("sections", [])}
-        adapted_sections = {section["key"] for section in document.get("sections", [])}
-        original_structure = len(expected_sections & original_sections) / len(expected_sections)
-        adapted_structure = len(expected_sections & adapted_sections) / len(expected_sections)
-        target = ResumeStructureService.normalize(titulo_vaga or "")
-        original_positioning = 1 if target and target in ResumeStructureService.normalize(" ".join(structure.get("header", []))) else 0
-        adapted_positioning = 1 if target and target in ResumeStructureService.normalize(role_title) else 0
-        ats_before = round(coverage * 75 + original_structure * 15 + original_positioning * 10)
-        ats_after = round(coverage * 75 + adapted_structure * 15 + adapted_positioning * 10)
+            summary += f" Experiência relatada no currículo em {focus}, priorizada para esta oportunidade."
+        proven_skills = [term for term in requirements(resume["texto"])
+                         if evidence_for(term, evidence_structure, confirmations.get(ResumeStructureService.normalize(term)))["experiencia_sustentada"]]
+        document = self._adapt_structure(structure, summary, role_title, proven_skills)
+        from app.ai.ats_score import calculate
+        ats_before = calculate({"texto_curriculo": resume["texto"]})
+        ats_after = calculate({"texto_curriculo": ResumeStructureService.to_text(document)})
         warnings = []
         if missing:
             warnings.append(f"{len(missing)} requisito(s) sem evidência não foram incluídos no currículo.")
@@ -313,7 +260,8 @@ class ResumeAdaptationService:
             "resumo_direcionado": summary,
             "competencias_alinhadas": aligned,
             "palavras_revisar": missing,
-            "matriz_evidencias": matrix,
+            "matriz_evidencias": evidence_matrix,
+            "inventario_requisitos": scope,
             "documento": document,
             "texto_previa": ResumeStructureService.to_text(document),
             "texto_original": resume["texto"],
@@ -321,7 +269,7 @@ class ResumeAdaptationService:
             "score_ats": {
                 "antes": ats_before,
                 "depois": ats_after,
-                "criterios": "75% requisitos comprovados, 15% estrutura e 10% posicionamento do título.",
+                "criterios": "Completude de cinco seções documentais, 20 pontos cada; não mede aderência ou experiência.",
             },
             "aviso": "Revise esta versão antes de enviar. O currículo original não foi alterado.",
         }

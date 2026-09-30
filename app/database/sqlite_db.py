@@ -323,6 +323,10 @@ class Database:
                 ("avaliacoes_com_evidencias",),
             )
 
+        if 8 not in aplicadas:
+            self._migracao_perfis_e_evidencias(cursor)
+            cursor.execute("INSERT INTO schema_migrations(version, name) VALUES(8, 'perfis_e_evidencias')")
+
     @staticmethod
     def _migracao_busca_e_pipeline(cursor):
         cursor.execute("""
@@ -664,6 +668,8 @@ class Database:
             )
             cursor.execute("DELETE FROM job_matches WHERE resume_id = ?", (resume_id,))
             cursor.execute("DELETE FROM resume_analysis WHERE resume_id = ?", (resume_id,))
+            for table in ("assistant_messages", "interview_sessions", "profile_preferences", "competency_confirmations"):
+                cursor.execute(f"DELETE FROM {table} WHERE resume_id = ?", (resume_id,))
             cursor.execute("DELETE FROM resumes WHERE id = ?", (resume_id,))
             cursor.execute("DELETE FROM jobs WHERE id NOT IN (SELECT DISTINCT job_id FROM job_matches)")
             cursor.execute("DELETE FROM app_state WHERE key = 'active_resume_id' AND value = ?", (str(resume_id),))
@@ -675,11 +681,8 @@ class Database:
 
         total = cursor.fetchone()[0]
 
-        if total == 0:
-            cursor.execute(
-                "DELETE FROM sqlite_sequence WHERE name='resumes'"
-            )
-        elif self.obter_curriculo_ativo_id() is None:
+        # IDs must never be reused: an in-flight response still belongs to the deleted profile.
+        if total > 0 and self.obter_curriculo_ativo_id() is None:
             proximo = self.conn.execute("SELECT id FROM resumes ORDER BY data_importacao DESC, id DESC LIMIT 1").fetchone()
             if proximo:
                 self.definir_curriculo_ativo(proximo["id"])
@@ -1071,20 +1074,25 @@ class Database:
     def atualizar_status_oportunidade(self, oportunidade_id, status):
         self.atualizar_candidatura(oportunidade_id, status=status)
 
-    def salvar_mensagem_assistente(self, role, content):
-        self.conn.execute("INSERT INTO assistant_messages (role, content) VALUES (?, ?)", (role, content))
+    def salvar_mensagem_assistente(self, role, content, resume_id):
+        if resume_id is None:
+            raise ValueError("Selecione um currículo para salvar a conversa.")
+        self.conn.execute("INSERT INTO assistant_messages (role, content, resume_id) VALUES (?, ?, ?)", (role, content, resume_id))
         self.conn.commit()
 
-    def listar_mensagens_assistente(self, limite=20):
-        cursor = self.conn.cursor()
-        return cursor.execute("SELECT * FROM assistant_messages ORDER BY id DESC LIMIT ?", (limite,)).fetchall()
+    def listar_mensagens_assistente(self, limite=20, resume_id=None):
+        # No implicit global lookup, including when the last resume was deleted.
+        return self.conn.execute(
+            "SELECT * FROM assistant_messages WHERE resume_id = ? ORDER BY id DESC LIMIT ?",
+            (resume_id, limite),
+        ).fetchall()
 
-    def salvar_entrevista(self, pergunta, resposta, feedback, nota, tema):
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            INSERT INTO interview_sessions (pergunta, resposta, feedback, nota, tema)
-            VALUES (?, ?, ?, ?, ?)
-        """, (pergunta, resposta, feedback, nota, tema))
+    def salvar_entrevista(self, pergunta, resposta, feedback, nota, tema, resume_id):
+        if resume_id is None:
+            raise ValueError("Selecione um currículo para salvar a entrevista.")
+        cursor = self.conn.execute("""INSERT INTO interview_sessions
+            (pergunta, resposta, feedback, nota, tema, resume_id) VALUES (?, ?, ?, ?, ?, ?)""",
+            (pergunta, resposta, feedback, nota, tema, resume_id))
         self.conn.commit()
         return cursor.lastrowid
 
@@ -1156,6 +1164,7 @@ class Database:
         competencias_faltantes=None,
         recomendacoes=None,
         resumo=None,
+        avaliacao=None,
     ):
 
         cursor = self.conn.cursor()
@@ -1209,6 +1218,8 @@ class Database:
             resumo
         ))
 
+        self.conn.execute("UPDATE resume_analysis SET avaliacao_json=? WHERE id=?",
+                          (json.dumps(avaliacao or {}, ensure_ascii=False), cursor.lastrowid))
         self.conn.commit()
         self.definir_curriculo_ativo(resume_id)
 
@@ -1354,15 +1365,52 @@ class Database:
         cursor.execute("CREATE TABLE IF NOT EXISTS career_preferences (id INTEGER PRIMARY KEY CHECK(id=1), objetivo TEXT NOT NULL)")
 
 
-    def salvar_objetivo_carreira(self, objetivo):
+    def salvar_objetivo_carreira(self, objetivo, resume_id):
+        if resume_id is None:
+            raise ValueError("Selecione um currículo para definir seu objetivo.")
         self.conn.execute(
-            "INSERT INTO career_preferences(id, objetivo) VALUES(1, ?) "
-            "ON CONFLICT(id) DO UPDATE SET objetivo=excluded.objetivo", (objetivo[:2000],),
+            "INSERT INTO profile_preferences(resume_id, objetivo) VALUES(?, ?) "
+            "ON CONFLICT(resume_id) DO UPDATE SET objetivo=excluded.objetivo", (resume_id, objetivo[:2000]),
         )
         self.conn.commit()
 
-
-    def obter_objetivo_carreira(self):
-        row = self.conn.execute("SELECT objetivo FROM career_preferences WHERE id=1").fetchone()
+    def obter_objetivo_carreira(self, resume_id=None):
+        row = self.conn.execute("SELECT objetivo FROM profile_preferences WHERE resume_id=?", (resume_id,)).fetchone()
         return row[0] if row else ""
 
+    @staticmethod
+    def _migracao_perfis_e_evidencias(cursor):
+        # Legacy NULL records are quarantined; never guess the owner from the active profile.
+        for table in ("assistant_messages", "interview_sessions"):
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN resume_id INTEGER REFERENCES resumes(id) ON DELETE CASCADE")
+            cursor.execute(f"CREATE INDEX idx_{table}_profile ON {table}(resume_id, id)")
+        cursor.execute("ALTER TABLE resume_analysis ADD COLUMN avaliacao_json TEXT NOT NULL DEFAULT '{}'")
+        cursor.execute("""CREATE TABLE profile_preferences(
+            resume_id INTEGER PRIMARY KEY REFERENCES resumes(id) ON DELETE CASCADE,
+            objetivo TEXT NOT NULL DEFAULT '')""")
+        cursor.execute("""CREATE TABLE competency_confirmations(
+            resume_id INTEGER NOT NULL REFERENCES resumes(id) ON DELETE CASCADE,
+            competencia TEXT NOT NULL, estado TEXT NOT NULL CHECK(estado IN ('lacuna', 'pendente')),
+            fonte TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(resume_id, competencia))""")
+
+    def registrar_confirmacao_competencia(self, resume_id, competencia, estado, fonte):
+        from app.services.evidence_service import normalize
+        if not str(fonte or "").strip():
+            raise ValueError("Informe a origem e data da confirmação.")
+        self.conn.execute("""INSERT INTO competency_confirmations(resume_id, competencia, estado, fonte)
+            VALUES (?, ?, ?, ?) ON CONFLICT(resume_id, competencia) DO UPDATE SET
+            estado=excluded.estado, fonte=excluded.fonte, updated_at=CURRENT_TIMESTAMP""",
+            (resume_id, normalize(competencia), estado, fonte.strip()))
+        self.conn.commit()
+
+    def listar_confirmacoes_competencias(self, resume_id):
+        rows = self.conn.execute("SELECT * FROM competency_confirmations WHERE resume_id=?", (resume_id,))
+        return {row["competencia"]: dict(row) for row in rows}
+
+    def excluir_historico_sem_perfil(self):
+        """Exclusão explícita dos registros legados que não têm proprietário identificável."""
+        with self.conn:
+            for table in ("assistant_messages", "interview_sessions"):
+                self.conn.execute(f"DELETE FROM {table} WHERE resume_id IS NULL")
+            self.conn.execute("DELETE FROM career_preferences")

@@ -44,3 +44,4 @@ class ResumeAnalysis:
     sugestoes: List[str] = field(default_factory=list)
 
     matching: float = 0.0
+    avaliacao: dict = field(default_factory=dict)

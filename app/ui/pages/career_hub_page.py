@@ -44,6 +44,7 @@ class CareerHubPage(QWidget):
         self.relatorios = ReportService()
         self.thread = self.worker = None
         self.pergunta_atual = ""
+        self._perfil_id = None
         self.pacote_atual = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
@@ -152,6 +153,19 @@ class CareerHubPage(QWidget):
 
     def atualizar_perfil(self):
         """Exibe uma síntese determinística da última análise, sem nova chamada à IA."""
+        profile_id = self.db.obter_curriculo_ativo_id()
+        if profile_id != self._perfil_id:
+            self._perfil_id = profile_id
+            self.chat.clear()
+            self.chat_input.clear()
+            self.resposta.clear()
+            self.feedback.clear()
+            self.pergunta_atual = ""
+            self.lbl_pergunta.setText("Gere uma pergunta para este currículo.")
+            self.objetivo_carreira.setText(self.db.obter_objetivo_carreira(profile_id))
+            for message in reversed(self.db.listar_mensagens_assistente(resume_id=profile_id)):
+                self.chat.append(f"<b>{escape(message['role'])}:</b> {escape(message['content'])}")
+        self.objetivo_carreira.setEnabled(profile_id is not None)
         analise = self.db.obter_analise_ativa()
         if not analise:
             self.perfil_resumo.setText(
@@ -212,13 +226,16 @@ class CareerHubPage(QWidget):
     def _aba_chat(self):
         aba = QWidget(); layout = QVBoxLayout(aba)
         layout.addWidget(QLabel("Pergunte sobre currículo, posicionamento, carreira ou preparação para vagas."))
-        self.objetivo_carreira = QLineEdit(self.db.obter_objetivo_carreira())
+        self.objetivo_carreira = QLineEdit()
         self.objetivo_carreira.setMaxLength(2000)
         self.objetivo_carreira.setPlaceholderText("Objetivo de carreira (salvo ao sair do campo)")
         self.objetivo_carreira.editingFinished.connect(
-            lambda: self.db.salvar_objetivo_carreira(self.objetivo_carreira.text().strip())
+            lambda: self.db.salvar_objetivo_carreira(self.objetivo_carreira.text().strip(), self._perfil_id) if self._perfil_id is not None else None
         )
         layout.addWidget(self.objetivo_carreira)
+        legacy = QPushButton("Apagar conversas e entrevistas antigas sem vínculo com perfil")
+        legacy.clicked.connect(self.excluir_historico_legado)
+        layout.addWidget(legacy)
         self.chat = QTextEdit(); self.chat.setReadOnly(True)
         self.chat.setPlaceholderText("A conversa aparecerá aqui.")
         self.chat_input = QLineEdit(); self.chat_input.setPlaceholderText("Ex.: Como posso melhorar meu currículo para uma vaga de analista?")
@@ -227,6 +244,12 @@ class CareerHubPage(QWidget):
         self.chat_input.returnPressed.connect(self.chat_enviar.click)
         layout.addWidget(self.chat); layout.addWidget(self.chat_input); layout.addWidget(self.chat_enviar)
         return aba
+
+    def excluir_historico_legado(self):
+        if QMessageBox.question(self, "Excluir histórico legado",
+            "Apagar conversas, entrevistas e objetivo antigos sem vínculo identificável? "
+            "Os históricos vinculados aos currículos serão preservados.") == QMessageBox.StandardButton.Yes:
+            self.db.excluir_historico_sem_perfil()
 
     def _aba_entrevista(self):
         aba = QWidget(); layout = QVBoxLayout(aba)
@@ -270,14 +293,20 @@ class CareerHubPage(QWidget):
             return
         if operacao == "conversar" and not args[0].strip():
             return
-        self.thread = QThread(self); self.worker = CareerWorker(operacao, *args)
+        profile_id = self.db.obter_curriculo_ativo_id()
+        if profile_id is None:
+            QMessageBox.information(self, "Perfil", "Selecione e analise um currículo primeiro.")
+            return
+        self.chat_input.setEnabled(False)
+        self.thread = QThread(self); self.worker = CareerWorker(operacao, *args, resume_id=profile_id)
         self.worker.moveToThread(self.thread); self.thread.started.connect(self.worker.run)
-        self.worker.finished.connect(callback); self.worker.failed.connect(self.erro)
+        self.worker.finished.connect(lambda result: callback(result) if self.db.obter_curriculo_ativo_id() == profile_id else None); self.worker.failed.connect(self.erro)
         self.worker.finished.connect(self.thread.quit); self.worker.failed.connect(self.thread.quit)
         self.thread.finished.connect(self.finalizar); self.thread.finished.connect(self.worker.deleteLater); self.thread.finished.connect(self.thread.deleteLater)
         self.thread.start()
 
     def finalizar(self):
+        self.chat_input.setEnabled(True)
         self.thread = self.worker = None
 
     def erro(self, mensagem):
