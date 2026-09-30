@@ -180,7 +180,7 @@ class CareerHubPage(QWidget):
             f"<b>Competências identificadas:</b> {escape(', '.join(habilidades[:8]) or 'Não identificadas')}<br>"
             f"<b>Competências comprovadas:</b> {escape(comprovadas or 'Não identificadas')}<br>"
             f"<b>Termos de mercado sugeridos:</b> {escape(sugeridas or 'Nenhuma sugestão adicional')}<br>"
-            f"<b>Para desenvolver:</b> {escape(', '.join(faltantes[:4]) or 'Revise as recomendações da análise')}"
+            f"<b>Para validar:</b> {escape(', '.join(faltantes[:4]) or 'Revise as recomendações da análise')}"
         )
         if hasattr(self, "btn_busca_integrada"):
             self.btn_busca_integrada.setEnabled(True)
@@ -212,6 +212,13 @@ class CareerHubPage(QWidget):
     def _aba_chat(self):
         aba = QWidget(); layout = QVBoxLayout(aba)
         layout.addWidget(QLabel("Pergunte sobre currículo, posicionamento, carreira ou preparação para vagas."))
+        self.objetivo_carreira = QLineEdit(self.db.obter_objetivo_carreira())
+        self.objetivo_carreira.setMaxLength(2000)
+        self.objetivo_carreira.setPlaceholderText("Objetivo de carreira (salvo ao sair do campo)")
+        self.objetivo_carreira.editingFinished.connect(
+            lambda: self.db.salvar_objetivo_carreira(self.objetivo_carreira.text().strip())
+        )
+        layout.addWidget(self.objetivo_carreira)
         self.chat = QTextEdit(); self.chat.setReadOnly(True)
         self.chat.setPlaceholderText("A conversa aparecerá aqui.")
         self.chat_input = QLineEdit(); self.chat_input.setPlaceholderText("Ex.: Como posso melhorar meu currículo para uma vaga de analista?")
@@ -426,7 +433,9 @@ class CareerHubPage(QWidget):
         self.iniciar("avaliar_resposta", [self.pergunta_atual, self.resposta.toPlainText(), self.tema.currentText()], self.mostrar_feedback)
 
     def mostrar_feedback(self, resultado):
-        self.feedback.setText(f"Nota: {resultado['nota']}/100\n\n{resultado['feedback']}")
+        nota = resultado.get("nota")
+        label = f"Estimativa da IA: {nota}/100" if nota is not None else "Sem avaliação numérica"
+        self.feedback.setText(f"{label}\n\n{resultado['feedback']}")
 
     def mostrar_plano(self, itens):
         self.plano.setPlainText("\n".join(f"• {item}" for item in itens))

@@ -32,8 +32,9 @@ class JobMatchWorker(QObject):
     finished = Signal(dict)
     failed = Signal(str)
 
-    def __init__(self, descricao, titulo=None):
+    def __init__(self, descricao, titulo=None, revisao=None):
         super().__init__()
+        self.revisao = revisao
         self.descricao = descricao
         self.titulo = titulo
 
@@ -44,7 +45,7 @@ class JobMatchWorker(QObject):
             # O serviço (e a conexão SQLite) é criado dentro da thread correta.
             from app.services.job_match_service import JobMatchService
             service = JobMatchService()
-            self.finished.emit(service.comparar(self.descricao, self.titulo))
+            self.finished.emit(service.comparar(self.descricao, self.titulo, revisao=self.revisao))
         except Exception as erro:
             self.failed.emit(str(erro))
         finally:
@@ -115,7 +116,7 @@ class JobBatchMatchWorker(QObject):
                 try:
                     resultado = service.comparar(vaga["descricao"], vaga.get("titulo"))
                     resultados.append(resultado)
-                    self.progress.emit(indice, total, resultado["compatibilidade"], "")
+                    self.progress.emit(indice, total, resultado["compatibilidade"] if resultado["compatibilidade"] is not None else -1, "")
                 except Exception as erro:
                     self.progress.emit(indice, total, -1, str(erro))
             self.finished.emit(resultados)

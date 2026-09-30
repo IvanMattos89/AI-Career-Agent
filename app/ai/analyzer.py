@@ -10,6 +10,7 @@ from app.ai.parser import parse_resume_analysis
 from app.ai.professions import PROFESSIONS
 from app.ai.prompts import RESUME_ANALYSIS_PROMPT
 from app.ai.seniority_engine import estimate as estimar_senioridade
+from app.ai.seniority_engine import experience_years
 from app.ai.skill_detector import SkillDetector
 
 
@@ -55,7 +56,7 @@ class ResumeAnalyzer:
             "Análise local baseada em cargos, competências e sinais de experiência encontrados no currículo. "
             "Conecte um provedor de IA para recomendações mais detalhadas."
         )
-        ats = calculate({"cargo": cargo if cargo != "Profissão não identificada" else "", "area": area if area != "Não identificada" else "", "senioridade": senioridade, "hard_skills": skills, "tecnologias": skills, "idiomas": idiomas, "certificacoes": certificacoes, "resumo": resumo})
+        ats = calculate({"cargo": cargo if cargo != "Profissão não identificada" else "", "area": area if area != "Não identificada" else "", "senioridade": senioridade, "hard_skills": skills, "tecnologias": skills, "idiomas": idiomas, "certificacoes": certificacoes, "resumo": texto})
         recomendacoes = [
             "Inclua resultados mensuráveis nas experiências mais relevantes.",
             "Adapte o resumo profissional às palavras-chave da vaga antes de candidatar.",
@@ -92,7 +93,7 @@ class ResumeAnalyzer:
 
     @staticmethod
     def _anos_experiencia(texto):
-        explicit = [int(valor) for valor in re.findall(r"(?<!\d)(\d{1,2})\s*\+?\s*anos?", texto)]
+        explicit = [experience_years(texto)]
         intervals = []
         current = date.today()
         pattern = re.compile(
@@ -132,7 +133,7 @@ class ResumeAnalyzer:
             "CPA": r"(?<!\w)cpa(?:[- ]?\d{2})?(?!\w)",
             "AWS Certified": r"(?<!\w)aws certified(?!\w)",
             "Certificação SAP": (
-                r"(?<!\w)(?:certificacao|certificado|academia)\s+(?:em\s+)?sap(?!\w)"
+                r"(?<!\w)(?:certificacao|certificado)\s+(?:em\s+)?sap(?!\w)"
             ),
         }
         return [name for name, pattern in patterns.items() if re.search(pattern, texto)]

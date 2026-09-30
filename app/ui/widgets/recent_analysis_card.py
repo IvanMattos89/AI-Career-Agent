@@ -40,7 +40,7 @@ class RecentAnalysisCard(QFrame):
         self.lblCargo = QLabel(cargo)
         self.lblCargo.setObjectName("cargo")
 
-        self.lblInfo = QLabel(f"ATS: {ats}    |    {data}")
+        self.lblInfo = QLabel(f"Completude: {ats}    |    {data}")
         self.lblInfo.setObjectName("info")
 
         layout.addWidget(self.lblCargo)
@@ -48,4 +48,4 @@ class RecentAnalysisCard(QFrame):
 
     def atualizar(self, cargo, ats, data):
         self.lblCargo.setText(cargo)
-        self.lblInfo.setText(f"ATS: {ats}    |    {data}")
+        self.lblInfo.setText(f"Completude: {ats}    |    {data}")

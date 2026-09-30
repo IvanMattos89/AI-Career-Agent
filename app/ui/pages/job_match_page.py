@@ -205,14 +205,28 @@ class JobMatchPage(QWidget):
         adaptacao.addStretch()
         layout.addLayout(adaptacao)
 
+        self.condicoes_match = QComboBox()
+        self.condicoes_match.addItem("Condições ainda não verificadas", "pendentes")
+        self.condicoes_match.addItem("Escopo, requisitos essenciais e condições validados por mim", "alinhadas")
+        self.condicoes_match.addItem("Incompatibilidade essencial confirmada por mim", "incompativeis")
+        self.evidencia_match = QLineEdit()
+        self.evidencia_match.setPlaceholderText("Evidência da revisão: fonte, data e condição verificada")
+        self.lacunas_match = QLineEdit()
+        self.lacunas_match.setPlaceholderText("Lacunas confirmadas por você, separadas por ; (opcional)")
+        self.txtVaga.textChanged.connect(self._limpar_revisao)
+        layout.addWidget(self.condicoes_match)
+        layout.addWidget(self.evidencia_match)
+        layout.addWidget(self.lacunas_match)
         self.status = QLabel("")
         layout.addWidget(self.status)
-        self.score = ScoreCard("Compatibilidade")
+        self.score = ScoreCard("Cobertura dos requisitos identificados")
         self.explicacao = SectionCard("Como a nota foi calculada")
         self.encontradas = SectionCard("Competências encontradas")
-        self.faltantes = SectionCard("Competências faltantes")
+        self.faltantes = SectionCard("Lacunas confirmadas")
+        self.pendentes = SectionCard("Competências não informadas / a validar")
+        self.decisao = SectionCard("Recomendação e próximo passo")
         self.recomendacoes = SectionCard("Recomendações")
-        for card in (self.score, self.explicacao, self.encontradas, self.faltantes, self.recomendacoes):
+        for card in (self.score, self.explicacao, self.encontradas, self.faltantes, self.pendentes, self.decisao, self.recomendacoes):
             card.hide()
             layout.addWidget(card)
 
@@ -268,7 +282,11 @@ class JobMatchPage(QWidget):
         self.btnComparar.setEnabled(False)
         self.status.setText("Analisando compatibilidade em segundo plano...")
         self.thread = QThread(self)
-        self.worker = JobMatchWorker(vaga, self.titulo_vaga_atual)
+        self.worker = JobMatchWorker(vaga, self.titulo_vaga_atual, {
+            "condicoes": self.condicoes_match.currentData(),
+            "evidencia": self.evidencia_match.text().strip(),
+            "lacunas_confirmadas": [item.strip() for item in self.lacunas_match.text().split(";") if item.strip()],
+        })
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
         self.worker.finished.connect(self.mostrar_resultado)
@@ -501,13 +519,13 @@ class JobMatchPage(QWidget):
         self.batch_thread.start()
 
     def atualizar_progresso_lote(self, indice, total, nota, erro):
-        self.resultados_busca.setItem(indice, 6, QTableWidgetItem(f"{nota}%" if nota >= 0 else "Falhou"))
+        self.resultados_busca.setItem(indice, 6, QTableWidgetItem(f"{nota}%" if nota >= 0 else ("Falhou" if erro else "Pendente")))
         self.status.setText(f"Comparando {indice + 1} de {total} vagas...")
 
     def finalizar_lote(self, resultados):
         self.status.setText(f"{len(resultados)} vagas comparadas e salvas no histórico.")
         if resultados:
-            self.mostrar_resultado(max(resultados, key=lambda item: item["compatibilidade"]))
+            self.mostrar_resultado(max(resultados, key=lambda item: item["compatibilidade"] if item["compatibilidade"] is not None else -1))
 
     def mostrar_erro_lote(self, mensagem):
         QMessageBox.critical(self, "Erro ao comparar vagas", mensagem)
@@ -540,8 +558,17 @@ class JobMatchPage(QWidget):
     def mostrar_resultado(self, resultado):
         self.resultado_atual = resultado
         self.score.setScore(resultado["compatibilidade"])
+        self.score.show()
+        self.pendentes.setItems(resultado.get("competencias_nao_informadas", []))
+        self.decisao.setText(
+            f"{resultado.get('recomendacao', 'investigar').capitalize()}: "
+            f"{resultado.get('justificativa', 'Registro anterior aos critérios atuais; refaça a comparação.')} "
+            f"Próximo passo: {resultado.get('proximo_passo', 'Refazer a comparação.')}"
+        )
+        for card in (self.explicacao, self.encontradas, self.faltantes, self.pendentes, self.decisao, self.recomendacoes):
+            card.show()
         self.explicacao.setText(resultado["explicacao"])
-        self.encontradas.setItems(resultado["competencias_encontradas"])
+        self.encontradas.setItems(resultado.get("evidencias") or resultado["competencias_encontradas"])
         self.faltantes.setItems(resultado["competencias_faltantes"])
         self.recomendacoes.setItems(resultado["recomendacoes"])
         self.btn_docx.setEnabled(True)
@@ -559,19 +586,25 @@ class JobMatchPage(QWidget):
             primeira.setData(256, item["id"])
             self.historico.setItem(linha, 0, primeira)
             self.historico.setItem(linha, 1, QTableWidgetItem(item["nome_arquivo"]))
-            self.historico.setItem(linha, 2, QTableWidgetItem(f'{item["compatibilidade"]}%'))
+            self.historico.setItem(linha, 2, QTableWidgetItem(f'{item["compatibilidade"]}%' if item["compatibilidade"] >= 0 else "Pendente"))
 
     def abrir_historico(self, linha, _coluna):
         match_id = self.historico.item(linha, 0).data(256)
         item = self.db.obter_job_match(match_id)
         if not item:
             return
+        stored = json.loads(item["resultado_json"] or "{}")
+        if stored:
+            stored.update(id=item["id"], descricao_vaga=item["descricao"], curriculo=item["nome_arquivo"])
+            self.mostrar_resultado(stored)
+            return
         self.mostrar_resultado({
-            "id": item["id"], "compatibilidade": item["compatibilidade"],
+            "id": item["id"], "compatibilidade": None,
             "competencias_encontradas": json.loads(item["competencias_encontradas"]),
-            "competencias_faltantes": json.loads(item["competencias_faltantes"]),
+            "competencias_faltantes": [],
+            "competencias_nao_informadas": json.loads(item["competencias_faltantes"]),
             "recomendacoes": json.loads(item["recomendacoes"]),
-            "explicacao": item["explicacao"] or "", "resumo": item["resumo"] or "",
+            "explicacao": f"Registro legado (nota original: {item['compatibilidade']}%). Refazer com os critérios atuais. " + (item["explicacao"] or ""), "resumo": item["resumo"] or "",
             "descricao_vaga": item["descricao"], "curriculo": item["nome_arquivo"],
         })
 
@@ -631,3 +664,9 @@ class JobMatchPage(QWidget):
             QMessageBox.information(self, "Currículo adaptado", f"PDF salvo em:\n{destino}")
         except Exception as erro:
             QMessageBox.critical(self, "Currículo adaptado", str(erro))
+
+
+    def _limpar_revisao(self):
+        self.condicoes_match.setCurrentIndex(0)
+        self.evidencia_match.clear()
+        self.lacunas_match.clear()

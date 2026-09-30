@@ -1,65 +1,34 @@
 import re
+import unicodedata
+
+
+def experience_years(texto: str) -> int:
+    texto = _normalize(texto)
+    values = re.findall(
+        r"(?<!\d)(\d{1,2})\+?\s*anos?\s+(?:de\s+)?(?:experiencia|atuacao)\s*(?:profissional)?\b",
+        texto,
+    )
+    return max((int(value) for value in values), default=0)
+
+
+def _normalize(texto):
+    return "".join(c for c in unicodedata.normalize("NFKD", texto or "") if not unicodedata.combining(c)).lower()
 
 
 def estimate(texto: str) -> str:
-
-    texto = texto.lower()
-
-    score = 0
-
-    # Tempo de experiência
-    anos_encontrados = re.findall(r"(\d+)\+?\s*anos", texto)
-
-    if anos_encontrados:
-        maior_tempo = max(int(ano) for ano in anos_encontrados)
-
-        if maior_tempo >= 10:
-            # Dez ou mais anos já representam um sinal suficiente de
-            # senioridade, mesmo quando o currículo não cita grandes empresas.
-            score += 45
-        elif maior_tempo >= 8:
-            score += 35
-        elif maior_tempo >= 5:
-            score += 25
-        elif maior_tempo >= 2:
-            score += 15
-
-    # Tecnologias indicam complexidade, mas nunca substituem tempo,
-    # autonomia ou responsabilidade comprovada.
-    tecnologias = [
-        "sap",
-        "s/4hana",
-        "ecc",
-        "mastersaf",
-        "ktax",
-        "tax one",
-        "oracle",
-        "totvs"
-    ]
-
-    for tecnologia in tecnologias:
-        if tecnologia in texto:
-            score += 1
-
-    # Responsabilidades
-    palavras = [
-        "governança",
-        "compliance",
-        "coordenação",
-        "liderança",
-        "implantação",
-        "revisão tributária",
-        "planejamento tributário"
-    ]
-
-    for palavra in palavras:
-        if palavra in texto:
-            score += 5
-
-    if score >= 45:
+    """Estimativa conservadora: idade, cursos e nomes de sistemas não dão senioridade."""
+    texto = _normalize(texto)
+    years = experience_years(texto)
+    if not years:
+        return "Não identificado"
+    responsibility = any(re.search(pattern, texto) for pattern in (
+        r"\b(?:liderei|coordenei|conduzi|implantei)\b",
+        r"\bresponsavel (?:pela|pelo|por)\b",
+        r"\bautonomia (?:tecnica|para)\b",
+    ))
+    # Tempo é um sinal explícito, não certificação de prontidão para Especialista.
+    if years >= 10 or (years >= 8 and responsibility):
         return "Sênior"
-
-    if score >= 30:
+    if years >= 5:
         return "Pleno"
-
     return "Júnior"

@@ -37,7 +37,7 @@ class LocalAnalysisTest(unittest.TestCase):
         analyzer = ResumeAnalyzer.__new__(ResumeAnalyzer)
 
         self.assertNotIn("Certificação SAP", analyzer._detectar_certificacoes("experiencia em sap"))
-        self.assertIn(
+        self.assertNotIn(
             "Certificação SAP",
             analyzer._detectar_certificacoes("academia sap s 4hana concluida"),
         )

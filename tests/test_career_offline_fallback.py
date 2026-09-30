@@ -41,5 +41,5 @@ class CareerOfflineFallbackTest(unittest.TestCase):
 
     def test_feedback_falls_back_when_provider_drops(self):
         resultado = self.service.avaliar_resposta("Pergunta", "Minha resposta possui detalhes suficientes para avaliação.", "RH")
-        self.assertEqual(resultado["nota"], 70)
+        self.assertIsNone(resultado["nota"])
         self.assertIn("modo local", resultado["feedback"])

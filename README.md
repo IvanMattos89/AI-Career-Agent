@@ -53,6 +53,25 @@ python run.py
 6. Revise a matriz de evidências e edite o conteúdo antes de salvar em Word ou PDF.
 7. Acompanhe as candidaturas na **Central de Carreira**.
 
+## Avaliações com evidências
+
+O Job Match separa menções encontradas, informações pendentes e lacunas confirmadas
+pelo usuário. Quando há pendências, a pontuação fica indisponível; informação ausente
+não é nota zero. A porcentagem disponível mede cobertura dos requisitos identificados,
+sem estimar probabilidade de contratação ou domínio profissional.
+
+Cada comparação termina em **priorizar**, **investigar** ou **descartar**, com justificativa,
+evidências textuais e próximo passo. Para priorizar ou descartar, registre na tela a revisão
+dos requisitos essenciais e condições, com fonte e data. Menções em cursos não comprovam
+implantação ou configuração. O histórico preserva a decisão; registros antigos precisam
+ser reavaliados. Relatórios DOCX/PDF incluem as pendências e a recomendação.
+
+Na Central de Carreira, o objetivo é editável e o assistente usa até dez mensagens recentes.
+Sem avaliação válida da IA, entrevistas mostram **sem avaliação numérica**.
+O indicador antes chamado ATS passa a ser **completude documental**, uma heurística
+separada da aderência à vaga; recomendações de melhoria não aumentam essa pontuação.
+A senioridade local permanece não identificada quando faltam sinais profissionais.
+
 ## Provedores configuráveis
 
 Vagas.com, Remotive e Arbeitnow funcionam sem configuração adicional. Para consultar boards
@@ -92,9 +111,14 @@ como pesquisas abertas no navegador; o aplicativo não realiza scraping nem auto
 
 ```powershell
 pip install -r requirements-dev.txt
-python -m ruff check app tests
-python -m unittest discover -s tests -v
+python -m pip check
+python -m compileall -q app
+python -m ruff check .
+python -m mypy app
+python -m pytest --cov=app --cov-report=term --cov-fail-under=70
 ```
+
+No Windows, `scripts/check.ps1 -Install` prepara o ambiente e executa essas verificações.
 
 O workflow em `.github/workflows/ci.yml` executa lint, compilação e testes no Windows.
 

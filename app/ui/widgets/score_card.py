@@ -6,7 +6,7 @@ from app.utils.score import classify_score
 
 class ScoreCard(QFrame):
 
-    def __init__(self, titulo="ATS SCORE"):
+    def __init__(self, titulo="Completude documental"):
         super().__init__()
 
         self.setMinimumHeight(145)
@@ -76,6 +76,13 @@ class ScoreCard(QFrame):
 
     def setScore(self, valor):
 
+        if valor is None or valor < 0:
+            self.lblScore.setText("—")
+            self.lblStatus.setText("Avaliação pendente")
+            self.progress.setValue(0)
+            self.setAccessibleName("Avaliação pendente, sem pontuação")
+            self.setToolTip("Informações insuficientes; não representa nota zero.")
+            return
         valor = max(0, min(100, int(valor)))
 
         self.lblScore.setText(str(valor))

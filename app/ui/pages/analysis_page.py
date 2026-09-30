@@ -65,7 +65,7 @@ class AnalysisPage(QWidget):
 
     def _criar_score(self):
 
-        self.score = ScoreCard("QUALIDADE ATS ESTIMADA")
+        self.score = ScoreCard("COMPLETUDE DOCUMENTAL")
 
         self.layout.addWidget(self.score)
 

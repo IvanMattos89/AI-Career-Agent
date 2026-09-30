@@ -1,5 +1,16 @@
 # Histórico de versões
 
+## Em desenvolvimento — confiabilidade das avaliações
+
+- Job Match valida formato e tipos da resposta da IA e usa fallback local em falhas.
+- Informações ausentes ficam pendentes; somente o usuário confirma lacunas com evidência.
+- Recomendações priorizar/investigar/descartar incluem justificativa e próximo passo.
+- Histórico e relatórios preservam pendências, evidências e decisões sem inventar nota.
+- Senioridade local não presume Júnior por falta de informação nem usa idade ou curso como experiência.
+- Entrevistas sem avaliação válida ficam sem nota; assistente utiliza objetivo editável e histórico recente.
+- Recomendações não elevam a completude documental; este indicador é separado do Job Match.
+- Validação local padronizada em pytest, com regressões para entradas inválidas e resultados pendentes.
+
 ## 3.4.0 - 2026-08-01
 
 - Detector de competências com limites de palavra e remoção de falsos positivos.

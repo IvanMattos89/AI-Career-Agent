@@ -63,7 +63,7 @@ class DatabaseMigrationTest(unittest.TestCase):
                 }
                 database.close()
 
-            self.assertEqual(versions, [1, 2, 3, 4, 5])
+            self.assertEqual(versions, [1, 2, 3, 4, 5, 7])
             self.assertEqual(opportunity["titulo"], "Analista Fiscal")
             self.assertIn("resume_id", package_columns)
             self.assertIn("structured_json", resume_columns)
