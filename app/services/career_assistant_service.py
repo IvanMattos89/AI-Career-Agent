@@ -1,3 +1,5 @@
+import re
+
 from app.ai.llm_client import LLMClient
 from app.database.sqlite_db import Database
 
@@ -17,7 +19,7 @@ class CareerAssistantService:
             f"Cargo: {analise['cargo'] or '-'}\nÁrea: {analise['area'] or '-'}\n"
             f"Senioridade: {analise['senioridade'] or '-'}\nHard skills: {analise['hard_skills'] or '-'}\n"
             f"Pontos de melhoria: {analise['pontos_melhoria'] or '-'}\n"
-            f"Competências faltantes: {analise['competencias_faltantes'] or '-'}\n"
+            f"Competências a validar (ausência no currículo não comprova lacuna): {analise['competencias_faltantes'] or '-'}\n"
             f"Resumo: {analise['resumo'] or '-'}"
         )
 
@@ -26,11 +28,20 @@ class CareerAssistantService:
         if not pergunta:
             raise ValueError("Digite uma pergunta para o assistente.")
         contexto = self._contexto()
+        history_reader = getattr(self.db, "listar_mensagens_assistente", None)
+        messages = history_reader(limite=10) if history_reader else []
+        history = "\n".join(f"{row['role']}: {row['content'][:1500]}" for row in reversed(messages))
+        objective_reader = getattr(self.db, "obter_objetivo_carreira", None)
+        objective = objective_reader() if objective_reader else ""
         resposta = None
         if self.llm.disponivel():
             prompt = (
                 "Você é um orientador de carreira. Responda em português, de forma prática, "
                 "sem inventar fatos sobre a pessoa. Use o contexto abaixo e sugira próximos passos claros.\n\n"
+                "Use o histórico para continuidade; respostas anteriores da IA não são fatos verificados. "
+                "Informação ausente é pendência, não falta de competência. "
+                "Conclua análises de vaga com recomendação, justificativa e próximo passo.\n"
+                f"OBJETIVO INFORMADO\n{objective[:2000]}\nHISTÓRICO RECENTE\n{history}\n"
                 f"CONTEXTO\n{contexto}\n\nPERGUNTA\n{pergunta}"
             )
             try:
@@ -42,8 +53,8 @@ class CareerAssistantService:
         if not resposta:
             resposta = (
                 "O modo local está ativo. Com base no seu perfil, comece por transformar "
-                "as experiências mais relevantes em resultados mensuráveis e priorize as "
-                "competências faltantes indicadas na última análise.\n\n"
+                "as experiências mais relevantes em resultados verificáveis, quantitativos ou qualitativos. "
+                "Valide informações ausentes antes de definir lacunas de desenvolvimento.\n\n"
                 f"Sua pergunta: {pergunta}"
             )
         self.db.salvar_mensagem_assistente("user", pergunta)
@@ -71,29 +82,27 @@ class CareerAssistantService:
         return perguntas.get(tema, perguntas["RH"])
 
     def avaliar_resposta(self, pergunta, resposta, tema):
-        if len((resposta or "").strip()) < 20:
-            feedback, nota = "Desenvolva a resposta com contexto, ação e resultado mensurável (método STAR).", 35
-        elif self.llm.disponivel():
+        if not (resposta or "").strip():
+            raise ValueError("Informe uma resposta para avaliação.")
+        feedback = (
+            "Avaliação indisponível no modo local. Organize a resposta em situação, tarefa, "
+            "ação e resultado verificável, quantitativo ou qualitativo. Nenhuma nota foi atribuída."
+        )
+        nota = None
+        if self.llm.disponivel():
             prompt = (
-                "Avalie esta resposta de entrevista de 0 a 100. Responda em português com uma nota "
-                "na primeira linha no formato 'NOTA: N' e até três sugestões práticas.\n"
-                f"Pergunta: {pergunta}\nResposta: {resposta}"
+                "Avalie esta resposta de entrevista de 0 a 100. Na primeira linha use 'NOTA: N'. "
+                "Justifique com evidências de contexto, responsabilidade pessoal, ação e resultado; "
+                "aceite resultados qualitativos verificáveis. Não invente métricas.\n"
+                f"Tema: {tema}\nPergunta: {pergunta}\nResposta: {resposta}"
             )
             try:
-                feedback = self.llm.perguntar(prompt, json_mode=False, timeout=12).strip()
-                import re
-                match = re.search(r"NOTA:\s*(\d{1,3})", feedback, re.I)
-                nota = min(100, int(match.group(1))) if match else 70
+                candidate = self.llm.perguntar(prompt, json_mode=False, timeout=12).strip()
+                match = re.match(r"NOTA:\s*(\d{1,3})\s*\n(.+)", candidate, re.I | re.S)
+                if match and 0 <= int(match.group(1)) <= 100 and match.group(2).strip():
+                    nota, feedback = int(match.group(1)), candidate
             except Exception:
-                feedback, nota = (
-                    "O modo local está ativo. Organize a resposta em situação, tarefa, ação e resultado; "
-                    "inclua uma métrica concreta e relacione a experiência ao cargo.", 70,
-                )
-        else:
-            feedback, nota = (
-                "Boa base. Para fortalecer, organize a resposta em situação, tarefa, ação e resultado; "
-                "inclua uma métrica concreta e relacione a experiência ao cargo.", 70,
-            )
+                pass
         self.db.salvar_entrevista(pergunta, resposta, feedback, nota, tema)
         return {"nota": nota, "feedback": feedback}
 
@@ -107,5 +116,5 @@ class CareerAssistantService:
                 itens.append(item.strip())
         for item in (analise["competencias_faltantes"] or "").split(";"):
             if item.strip():
-                itens.append(f"Estude ou evidencie: {item.strip()}")
-        return (itens or ["Revise o currículo e inclua resultados mensuráveis."])[:6]
+                itens.append(f"Valide em vaga relevante ou entrevista antes de planejar estudo: {item.strip()}")
+        return (itens or ["Revise o currículo e registre resultados verificáveis, inclusive qualitativos."])[:6]

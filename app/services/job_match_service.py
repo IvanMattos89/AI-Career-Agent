@@ -1,4 +1,5 @@
 import json
+import math
 import re
 from html import unescape
 
@@ -34,7 +35,13 @@ class JobMatchService:
             item = str(item).strip()
             if item:
                 resultado.append(item)
-        return list(dict.fromkeys(resultado))
+        seen = set()
+        unique = []
+        for item in resultado:
+            if item.casefold() not in seen:
+                unique.append(item)
+                seen.add(item.casefold())
+        return unique
 
     @staticmethod
     def _lista_de_texto(valor):
@@ -49,19 +56,41 @@ class JobMatchService:
             item for item in requisitos
             if re.search(r"(?<!\w)" + re.escape(item.lower()) + r"(?!\w)", evidencia)
         ]
-        faltantes = [item for item in requisitos if item not in encontradas]
-        base = requisitos
-        score = round((len(encontradas) / max(len(base), 1)) * 100)
         return {
-            "compatibilidade": score,
+            "compatibilidade": None,
             "competencias_encontradas": encontradas,
-            "competencias_faltantes": faltantes,
-            "recomendacoes": ["Inclua evidências práticas das competências mais importantes da vaga."],
-            "explicacao": "Estimativa local baseada nas competências identificadas na vaga e comprovadas no currículo.",
-            "resumo": "Comparação local concluída sem uso do modelo de IA.",
+            "competencias_faltantes": [],
+            "competencias_nao_informadas": [item for item in requisitos if item not in encontradas],
+            "recomendacoes": ["Valide evidências dos requisitos e as condições da oportunidade."],
+            "explicacao": "Comparação local de menções; não comprova domínio ou nível de proficiência.",
+            "resumo": "Comparação local sem uso de IA.",
         }
 
-    def comparar(self, descricao_vaga, titulo=None):
+    @staticmethod
+    def _validar_resultado(resultado):
+        if not isinstance(resultado, dict):
+            raise ValueError("Job Match deve retornar um objeto.")
+        if "compatibilidade" not in resultado:
+            raise ValueError("Pontuação ausente.")
+        score = resultado.get("compatibilidade")
+        if score is not None and (
+            isinstance(score, bool) or not isinstance(score, (int, float))
+            or not math.isfinite(score) or not 0 <= score <= 100
+        ):
+            raise ValueError("Pontuação inválida.")
+        for field in ("competencias_encontradas", "competencias_faltantes", "recomendacoes"):
+            value = resultado.get(field)
+            if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+                raise ValueError(f"Lista inválida: {field}")
+        unknown = resultado.get("competencias_nao_informadas", [])
+        if not isinstance(unknown, list) or any(not isinstance(item, str) for item in unknown):
+            raise ValueError("Pendências inválidas.")
+        for field in ("explicacao", "resumo"):
+            if not isinstance(resultado.get(field), str):
+                raise ValueError(f"Texto inválido: {field}")
+        return resultado
+
+    def comparar(self, descricao_vaga, titulo=None, revisao=None):
         descricao_vaga = self.limpar_descricao(descricao_vaga)
         if not descricao_vaga:
             raise ValueError("A descrição da vaga não contém texto utilizável.")
@@ -85,7 +114,7 @@ class JobMatchService:
             try:
                 resposta = self.analyzer.comparar(criar_prompt(contexto), timeout=20).strip()
                 resposta = re.sub(r"^```(?:json)?\s*|\s*```$", "", resposta, flags=re.I)
-                resultado = json.loads(resposta)
+                resultado = self._validar_resultado(json.loads(resposta))
             except (Exception,):
                 # Falhas de rede, timeout ou JSON inválido não devem impedir a
                 # comparação. O resultado local é salvo e deixa a interface útil.
@@ -98,31 +127,69 @@ class JobMatchService:
                 analise, descricao_vaga, curriculo["texto"] if curriculo else ""
             )
 
-        for chave in ("competencias_encontradas", "competencias_faltantes", "recomendacoes"):
-            resultado[chave] = self._normalizar_lista(resultado.get(chave, []))
+        # A IA não pode confirmar lacunas por silêncio no currículo.
+        revisao = revisao or {}
         evidence_text = " ".join((
             curriculo["texto"] if curriculo else "",
-            analise["hard_skills"] or "",
-            analise["tecnologias"] or "",
-            analise["idiomas"] or "",
-            analise["certificacoes"] or "",
+            analise["hard_skills"] or "", analise["tecnologias"] or "",
+            analise["idiomas"] or "", analise["certificacoes"] or "",
         ))
-        confirmed, rejected = [], []
-        for skill in resultado["competencias_encontradas"]:
-            if re.search(r"(?<!\w)" + re.escape(skill) + r"(?!\w)", evidence_text, flags=re.I):
+        candidates = self._normalizar_lista([
+            *SkillDetector().detectar(descricao_vaga),
+            *resultado["competencias_encontradas"],
+            *resultado["competencias_faltantes"],
+            *resultado.get("competencias_nao_informadas", []),
+        ])
+        gaps = revisao.get("lacunas_confirmadas", []) if str(revisao.get("evidencia", "")).strip() else []
+        gaps = gaps if isinstance(gaps, list) else []
+        gap_names = {str(item).strip().casefold() for item in gaps}
+        candidates = self._normalizar_lista([*candidates, *gaps])
+        confirmed, unknown, missing = [], [], []
+        snippets = []
+        for skill in candidates:
+            in_resume = re.search(r"(?<!\w)" + re.escape(skill) + r"(?!\w)", evidence_text, re.I)
+            in_job = re.search(r"(?<!\w)" + re.escape(skill) + r"(?!\w)", descricao_vaga, re.I)
+            negative = re.search(
+                r"(?:não|nao|sem)\s+(?:(?:tenho|possuo|experiência|experiencia|domínio|dominio|conhecimento|em|com)\s+){0,4}"
+                + re.escape(skill) + r"(?!\w)", evidence_text, re.I,
+            )
+            if skill.casefold() in gap_names and in_job:
+                missing.append(skill)
+            elif in_resume and in_job and not negative:
                 confirmed.append(skill)
+                start, end = in_resume.span()
+                snippets.append(f"{skill}: {evidence_text[max(0, start - 50):end + 80].strip()}")
             else:
-                rejected.append(skill)
+                unknown.append(skill)
+        resultado["evidencias"] = snippets
         resultado["competencias_encontradas"] = confirmed
-        resultado["competencias_faltantes"] = list(dict.fromkeys(
-            [*resultado["competencias_faltantes"], *rejected]
-        ))
-        resultado["compatibilidade"] = max(0, min(100, int(float(resultado.get("compatibilidade", 0)))))
-        evaluated = len(confirmed) + len(resultado["competencias_faltantes"])
-        if evaluated:
-            evidence_cap = round(len(confirmed) / evaluated * 100)
-            resultado["compatibilidade"] = min(resultado["compatibilidade"], evidence_cap)
-        resultado["explicacao"] = str(resultado.get("explicacao") or resultado.get("resumo") or "A nota considera a aderência entre experiência, competências e requisitos da vaga.")
+        resultado["competencias_nao_informadas"] = unknown
+        resultado["competencias_faltantes"] = missing
+        # Sem avaliação completa, a nota fica indisponível, nunca zero por silêncio.
+        resultado["compatibilidade"] = round(len(confirmed) / (len(confirmed) + len(missing)) * 100) if (confirmed or missing) and not unknown else None
+        resultado["explicacao"] = (
+            f"{len(confirmed)} requisitos com menções no currículo; {len(unknown)} pendentes; {len(missing)} lacunas confirmadas. "
+            "Menção não comprova domínio. A nota, quando disponível, mede apenas cobertura "
+            "dos requisitos identificados, não qualidade do currículo ou probabilidade de contratação. "
+            "Informações desconhecidas não são penalizadas; exigem validação."
+        )
+        evidence = str(revisao.get("evidencia", "")).strip()
+        state = revisao.get("condicoes", "pendentes")
+        if state == "incompativeis" and evidence:
+            decision = "descartar"
+            reason = "Incompatibilidade confirmada pelo usuário: " + evidence
+            next_step = "Reconsiderar apenas se a condição documentada mudar."
+        elif state == "alinhadas" and evidence and confirmed and not unknown and not missing:
+            decision = "priorizar"
+            reason = "Requisitos identificados com evidência e condições validadas pelo usuário: " + evidence
+            next_step = "Validar a profundidade das experiências e preparar candidatura; enviar só com autorização."
+        else:
+            decision = "investigar"
+            reason = "Requisitos ou condições ainda precisam de validação; desconhecido não significa lacuna."
+            next_step = "Confirmar pendências, escopo, crescimento, regime, remuneração e condições desejadas."
+        resultado.update(recomendacao=decision, justificativa=reason, proximo_passo=next_step)
+        resultado["revisao"] = revisao
+        resultado["resumo"] = f"{decision.capitalize()}: {reason} Próximo passo: {next_step}"
         resultado["id"] = self.db.salvar_job_match(analise["resume_id"], descricao_vaga, resultado, titulo=titulo)
         resultado["descricao_vaga"] = descricao_vaga
         resultado["curriculo"] = analise["nome_arquivo"]

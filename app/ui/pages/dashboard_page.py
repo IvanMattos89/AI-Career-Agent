@@ -23,7 +23,7 @@ class DashboardPage(QWidget):
 
         grid = QGridLayout()
 
-        self.cardATS = InfoCard("Qualidade ATS média", "0")
+        self.cardATS = InfoCard("Completude média", "0")
         self.cardCurriculos = InfoCard("Currículos", "0")
         self.cardVagas = InfoCard("Job Matches", "0")
         self.cardUltima = InfoCard("Último Cargo", "-")
@@ -65,7 +65,8 @@ class DashboardPage(QWidget):
 
         self.cardATS.setValue(str(dados["ats"]))
         self.cardCurriculos.setValue(str(dados["curriculos"]))
-        self.cardVagas.setValue(f'{dados["job_matches"]} ({dados["match_medio"]}%)')
+        media = f"{dados['match_medio']}%" if dados["match_medio"] is not None else "pendente"
+        self.cardVagas.setValue(f"{dados['job_matches']} ({media})")
         self.cardUltima.setValue(dados["cargo"])
         self.cardCandidaturas.setValue(str(dados["candidaturas"]))
         self.cardEntrevistas.setValue(f'{dados["taxa_entrevistas"]}%')

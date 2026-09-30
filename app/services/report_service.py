@@ -82,6 +82,19 @@ class ReportService:
             return "ArialResume", "ArialResume-Bold"
         return "Helvetica", "Helvetica-Bold"
 
+    @staticmethod
+    def _match_score_label(resultado):
+        value = resultado.get("compatibilidade")
+        return f"{value}%" if value is not None and value >= 0 else "Pendente — sem pontuação"
+
+    @staticmethod
+    def _match_decision_label(resultado):
+        return (
+            f"{resultado.get('recomendacao', 'investigar').capitalize()}: "
+            f"{resultado.get('justificativa', 'Reavaliar registro anterior aos critérios atuais.')} "
+            f"Próximo passo: {resultado.get('proximo_passo', 'Refazer comparação.')}"
+        )
+
     def exportar_job_match_docx(self, resultado):
         documento = Document()
         secao = documento.sections[0]
@@ -93,12 +106,15 @@ class ReportService:
         documento.add_heading("Relatório de Job Match", 0)
         documento.add_paragraph(f"Gerado em {datetime.now():%d/%m/%Y às %H:%M}")
         documento.add_paragraph(f"Currículo analisado: {resultado.get('curriculo', '-')}")
-        documento.add_heading(f"Compatibilidade: {resultado.get('compatibilidade', 0)}%", 1)
+        documento.add_heading(f"Cobertura dos requisitos: {self._match_score_label(resultado)}", 1)
         documento.add_paragraph(resultado.get("explicacao", ""))
+        documento.add_paragraph(self._match_decision_label(resultado))
 
         for titulo, chave in (
             ("Competências encontradas", "competencias_encontradas"),
-            ("Competências a desenvolver", "competencias_faltantes"),
+            ("Evidências textuais a validar", "evidencias"),
+            ("Lacunas confirmadas", "competencias_faltantes"),
+            ("Competências não informadas / a validar", "competencias_nao_informadas"),
             ("Recomendações", "recomendacoes"),
         ):
             documento.add_heading(titulo, 1)
@@ -129,13 +145,16 @@ class ReportService:
         corpo = ParagraphStyle("CorpoJobMatch", parent=estilos["Normal"], fontName="Helvetica", fontSize=10.5, leading=15, alignment=TA_JUSTIFY, spaceAfter=3)
         historia = [
             Paragraph("RELATÓRIO DE JOB MATCH", titulo),
-            Paragraph(f"Compatibilidade: <b>{int(resultado.get('compatibilidade', 0))}%</b>", corpo),
+            Paragraph(f"Cobertura dos requisitos: <b>{self._match_score_label(resultado)}</b>", corpo),
+            Paragraph(self._escapar_pdf(self._match_decision_label(resultado)), corpo),
             Paragraph("COMO A NOTA FOI CALCULADA", secao),
             Paragraph(self._escapar_pdf(resultado.get("explicacao", "-")), corpo),
         ]
         for cabecalho, chave in (
             ("COMPETÊNCIAS ENCONTRADAS", "competencias_encontradas"),
-            ("COMPETÊNCIAS A DESENVOLVER", "competencias_faltantes"),
+            ("EVIDÊNCIAS TEXTUAIS A VALIDAR", "evidencias"),
+            ("LACUNAS CONFIRMADAS", "competencias_faltantes"),
+            ("COMPETÊNCIAS NÃO INFORMADAS / A VALIDAR", "competencias_nao_informadas"),
             ("RECOMENDAÇÕES", "recomendacoes"),
         ):
             historia.append(Paragraph(cabecalho, secao))

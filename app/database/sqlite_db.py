@@ -1,4 +1,4 @@
-﻿import hashlib
+import hashlib
 import json
 import sqlite3
 from pathlib import Path
@@ -314,6 +314,13 @@ class Database:
             cursor.execute(
                 "INSERT INTO schema_migrations(version, name) VALUES(5, ?)",
                 ("chaves_de_vagas_normalizadas",),
+            )
+
+        if 7 not in aplicadas:
+            self._migracao_avaliacoes(cursor)
+            cursor.execute(
+                "INSERT INTO schema_migrations(version, name) VALUES(7, ?)",
+                ("avaliacoes_com_evidencias",),
             )
 
     @staticmethod
@@ -750,14 +757,15 @@ class Database:
         cursor.execute("""
             INSERT INTO job_matches (
                 resume_id, job_id, compatibilidade, competencias_encontradas,
-                competencias_faltantes, recomendacoes, explicacao, resumo
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                competencias_faltantes, recomendacoes, explicacao, resumo, resultado_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            resume_id, job_id, int(resultado.get("compatibilidade", 0)),
+            resume_id, job_id, int(resultado["compatibilidade"]) if resultado.get("compatibilidade") is not None else -1,
             json.dumps(resultado.get("competencias_encontradas", []), ensure_ascii=False),
             json.dumps(resultado.get("competencias_faltantes", []), ensure_ascii=False),
             json.dumps(resultado.get("recomendacoes", []), ensure_ascii=False),
             resultado.get("explicacao", ""), resultado.get("resumo", ""),
+            json.dumps(resultado, ensure_ascii=False),
         ))
         self.conn.commit()
         return cursor.lastrowid
@@ -1334,8 +1342,27 @@ class Database:
     def dashboard_job_match_metricas(self):
         cursor = self.conn.cursor()
         cursor.execute("""
-            SELECT COUNT(*) AS total, COALESCE(ROUND(AVG(compatibilidade), 0), 0) AS media
+            SELECT COUNT(*) AS total, ROUND(AVG(CASE WHEN compatibilidade >= 0 THEN compatibilidade END), 0) AS media
             FROM job_matches
         """)
         return cursor.fetchone()
+
+
+    @staticmethod
+    def _migracao_avaliacoes(cursor):
+        cursor.execute("ALTER TABLE job_matches ADD COLUMN resultado_json TEXT NOT NULL DEFAULT '{}'")
+        cursor.execute("CREATE TABLE IF NOT EXISTS career_preferences (id INTEGER PRIMARY KEY CHECK(id=1), objetivo TEXT NOT NULL)")
+
+
+    def salvar_objetivo_carreira(self, objetivo):
+        self.conn.execute(
+            "INSERT INTO career_preferences(id, objetivo) VALUES(1, ?) "
+            "ON CONFLICT(id) DO UPDATE SET objetivo=excluded.objetivo", (objetivo[:2000],),
+        )
+        self.conn.commit()
+
+
+    def obter_objetivo_carreira(self):
+        row = self.conn.execute("SELECT objetivo FROM career_preferences WHERE id=1").fetchone()
+        return row[0] if row else ""
 
