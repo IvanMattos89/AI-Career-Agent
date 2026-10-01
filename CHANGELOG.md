@@ -1,5 +1,15 @@
 # Histórico de versões
 
+## 2026-09-30 — perfis e consistência das evidências
+
+- Conversas, entrevistas, objetivos e confirmações vinculados ao currículo; exclusão remove seus registros.
+- Histórico legado sem perfil isolado do contexto e excluível pela Central de Carreira.
+- Evidências compartilhadas distinguem experiência relatada, curso, menção, negativa, conflito e ausência.
+- Inventário mantém requisitos desconhecidos, separa prioridades e impede nota completa em análise parcial.
+- Senioridade usa períodos profissionais e responsabilidades com evidências; tempo sozinho não define nível.
+- Completude de cinco seções, com teto de 100, sem favorecer tempo de carreira ou volume de habilidades.
+- Teste de fallback valida a chamada com timeout antes de simular a falha.
+
 ## Em desenvolvimento — confiabilidade das avaliações
 
 - Job Match valida formato e tipos da resposta da IA e usa fallback local em falhas.

@@ -17,7 +17,7 @@ class ServiceOrchestrationTest(unittest.TestCase):
             tecnologias=["SAP"], idiomas=["Inglês"], certificacoes=["CRC"],
             anos_experiencia=10, nivel_curriculo="Avançado", palavras_chave=["ICMS"],
             pontos_fortes=["Compliance"], pontos_melhoria=[], competencias_faltantes=[],
-            recomendacoes=["Quantificar resultados"], resumo="Resumo profissional completo.",
+            recomendacoes=["Quantificar resultados"], resumo="Resumo profissional completo.", avaliacao={},
         )
         service = AnalysisService.__new__(AnalysisService)
         service.analyzer = Mock(analisar=Mock(return_value=analysis))
@@ -49,6 +49,7 @@ class ServiceOrchestrationTest(unittest.TestCase):
         db.salvar_pacote_candidatura.return_value = 11
         service = ApplicationStudioService.__new__(ApplicationStudioService)
         service.db = db
+        db.listar_confirmacoes_competencias.return_value = {}
         service.llm = Mock(disponivel=Mock(return_value=False))
 
         package = service.gerar_pacote(5)
@@ -57,7 +58,7 @@ class ServiceOrchestrationTest(unittest.TestCase):
         self.assertIn("ICMS", package["palavras_chave"])
         self.assertNotIn("inglês avançado", package["palavras_chave"])
         matrix = {item["requisito"]: item["status"] for item in package["matriz_evidencias"]}
-        self.assertEqual(matrix["inglês avançado"], "Não comprovado")
+        self.assertEqual(matrix["inglês avançado"], "Não informado")
 
     def test_dashboard_service_combines_resume_match_and_pipeline_metrics(self):
         service = DashboardService.__new__(DashboardService)

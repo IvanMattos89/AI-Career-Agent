@@ -1,13 +1,14 @@
 import json
 import math
 import re
-from html import unescape
 
 from app.ai.analyzer import ResumeAnalyzer
 from app.ai.logging_config import logger
 from app.ai.skill_detector import SkillDetector
 from app.database.sqlite_db import Database
 from app.prompts.job_match_prompt import criar_prompt
+from app.services.evidence_service import clean_description, matrix, normalize
+from app.services.resume_structure_service import ResumeStructureService
 
 
 class JobMatchService:
@@ -19,10 +20,7 @@ class JobMatchService:
 
     @staticmethod
     def limpar_descricao(descricao):
-        texto = unescape(descricao or "")
-        texto = re.sub(r"<script[\s\S]*?</script>|<style[\s\S]*?</style>", " ", texto, flags=re.I)
-        texto = re.sub(r"<[^>]+>", " ", texto)
-        return re.sub(r"\s+", " ", texto).strip()
+        return clean_description(descricao)
 
     @staticmethod
     def _normalizar_lista(lista):
@@ -127,51 +125,46 @@ class JobMatchService:
                 analise, descricao_vaga, curriculo["texto"] if curriculo else ""
             )
 
-        # A IA não pode confirmar lacunas por silêncio no currículo.
         revisao = revisao or {}
-        evidence_text = " ".join((
-            curriculo["texto"] if curriculo else "",
-            analise["hard_skills"] or "", analise["tecnologias"] or "",
-            analise["idiomas"] or "", analise["certificacoes"] or "",
-        ))
-        candidates = self._normalizar_lista([
-            *SkillDetector().detectar(descricao_vaga),
-            *resultado["competencias_encontradas"],
-            *resultado["competencias_faltantes"],
-            *resultado.get("competencias_nao_informadas", []),
+        notes = str(revisao.get("evidencia", "")).strip()
+        gaps = revisao.get("lacunas_confirmadas", []) if notes else []
+        if not isinstance(gaps, list) or any(not isinstance(item, str) for item in gaps):
+            raise ValueError("Informe lacunas como uma lista de competências.")
+        confirmations = self.db.listar_confirmacoes_competencias(analise["resume_id"])
+        for skill in gaps:
+            self.db.registrar_confirmacao_competencia(analise["resume_id"], skill, "lacuna", notes)
+            confirmations[normalize(skill)] = {"estado": "lacuna", "fonte": notes}
+        extra_terms = self._normalizar_lista([
+            *resultado["competencias_encontradas"], *resultado["competencias_faltantes"],
+            *resultado.get("competencias_nao_informadas", []), *gaps,
         ])
-        gaps = revisao.get("lacunas_confirmadas", []) if str(revisao.get("evidencia", "")).strip() else []
-        gaps = gaps if isinstance(gaps, list) else []
-        gap_names = {str(item).strip().casefold() for item in gaps}
-        candidates = self._normalizar_lista([*candidates, *gaps])
-        confirmed, unknown, missing = [], [], []
-        snippets = []
-        for skill in candidates:
-            in_resume = re.search(r"(?<!\w)" + re.escape(skill) + r"(?!\w)", evidence_text, re.I)
-            in_job = re.search(r"(?<!\w)" + re.escape(skill) + r"(?!\w)", descricao_vaga, re.I)
-            negative = re.search(
-                r"(?:não|nao|sem)\s+(?:(?:tenho|possuo|experiência|experiencia|domínio|dominio|conhecimento|em|com)\s+){0,4}"
-                + re.escape(skill) + r"(?!\w)", evidence_text, re.I,
-            )
-            if skill.casefold() in gap_names and in_job:
-                missing.append(skill)
-            elif in_resume and in_job and not negative:
-                confirmed.append(skill)
-                start, end = in_resume.span()
-                snippets.append(f"{skill}: {evidence_text[max(0, start - 50):end + 80].strip()}")
-            else:
-                unknown.append(skill)
-        resultado["evidencias"] = snippets
+        structure = ResumeStructureService.from_text(curriculo["texto"] if curriculo else "")
+        records, scope = matrix(descricao_vaga, structure, confirmations, extra_terms)
+        confirmed = [row["requisito"] for row in records if row["experiencia_sustentada"]]
+        missing = [row["requisito"] for row in records if row["status"] == "Lacuna confirmada"]
+        unknown = [row["requisito"] for row in records if row["requisito"] not in confirmed + missing]
+        resultado["matriz_evidencias"] = records
+        resultado["inventario_requisitos"] = scope
+        resultado["evidencias"] = [f"{row['requisito']} — {row['status']}: {row['evidencia']}" for row in records]
+        resultado["abrangencia"] = [
+            f"{row['categoria']}: {row['trecho']} — "
+            + ("avaliação parcial; confirmar escopo e condições" if row["avaliacao_parcial"] else "termos reconhecidos; validar evidências")
+            for row in scope["trechos"]
+        ]
         resultado["competencias_encontradas"] = confirmed
         resultado["competencias_nao_informadas"] = unknown
         resultado["competencias_faltantes"] = missing
-        # Sem avaliação completa, a nota fica indisponível, nunca zero por silêncio.
-        resultado["compatibilidade"] = round(len(confirmed) / (len(confirmed) + len(missing)) * 100) if (confirmed or missing) and not unknown else None
+        partial = bool(scope["trechos_parciais"]) or not scope["trechos"]
+        resultado["compatibilidade"] = (
+            round(len(confirmed) / (len(confirmed) + len(missing)) * 100)
+            if (confirmed or missing) and not unknown and not partial else None
+        )
         resultado["explicacao"] = (
-            f"{len(confirmed)} requisitos com menções no currículo; {len(unknown)} pendentes; {len(missing)} lacunas confirmadas. "
-            "Menção não comprova domínio. A nota, quando disponível, mede apenas cobertura "
-            "dos requisitos identificados, não qualidade do currículo ou probabilidade de contratação. "
-            "Informações desconhecidas não são penalizadas; exigem validação."
+            f"{len(confirmed)} competências com experiência relatada; {len(unknown)} a validar; "
+            f"{len(missing)} lacunas confirmadas. {scope['trechos_parciais']} de "
+            f"{scope['trechos_analisados']} trechos têm avaliação parcial. "
+            "A pontuação só aparece quando todos os trechos reconhecidos estão avaliados. "
+            "Não estima contratação ou domínio profissional. " + scope["limitacao"]
         )
         evidence = str(revisao.get("evidencia", "")).strip()
         state = revisao.get("condicoes", "pendentes")
@@ -179,13 +172,13 @@ class JobMatchService:
             decision = "descartar"
             reason = "Incompatibilidade confirmada pelo usuário: " + evidence
             next_step = "Reconsiderar apenas se a condição documentada mudar."
-        elif state == "alinhadas" and evidence and confirmed and not unknown and not missing:
+        elif state == "alinhadas" and evidence and confirmed and not unknown and not missing and not partial:
             decision = "priorizar"
             reason = "Requisitos identificados com evidência e condições validadas pelo usuário: " + evidence
             next_step = "Validar a profundidade das experiências e preparar candidatura; enviar só com autorização."
         else:
             decision = "investigar"
-            reason = "Requisitos ou condições ainda precisam de validação; desconhecido não significa lacuna."
+            reason = "Há requisitos, condições ou profundidade da evidência a validar; desconhecido não significa lacuna."
             next_step = "Confirmar pendências, escopo, crescimento, regime, remuneração e condições desejadas."
         resultado.update(recomendacao=decision, justificativa=reason, proximo_passo=next_step)
         resultado["revisao"] = revisao

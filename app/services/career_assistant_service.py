@@ -1,38 +1,55 @@
+import json
 import re
 
 from app.ai.llm_client import LLMClient
 from app.database.sqlite_db import Database
+from app.services.evidence_service import evidence_for, normalize, requirements
+from app.services.resume_structure_service import ResumeStructureService
 
 
 class CareerAssistantService:
     """Camada V2 para conversa, treino de entrevista e plano de carreira."""
 
-    def __init__(self):
+    def __init__(self, resume_id=None):
         self.db = Database()
         self.llm = LLMClient()
+        self.resume_id = resume_id if resume_id is not None else self.db.obter_curriculo_ativo_id()
 
-    def _contexto(self):
-        analise = self.db.obter_analise_ativa()
-        if not analise:
-            return "Ainda não há currículo analisado. Oriente o usuário a importar e analisar um currículo."
+    def _perfil(self):
+        profile_id = getattr(self, "resume_id", None)
+        analysis = self.db.obter_analise(profile_id) if profile_id is not None else self.db.obter_analise_ativa()
+        if not analysis:
+            raise ValueError("Selecione e analise um currículo antes de usar o assistente.")
+        return analysis
+
+    def _contexto(self, analysis):
+        resume_id = analysis["resume_id"]
+        resume = self.db.obter_curriculo(resume_id)
+        if not resume:
+            raise ValueError("O currículo desta conversa foi excluído.")
+        structure = ResumeStructureService.from_text(resume["texto"])
+        confirmations = self.db.listar_confirmacoes_competencias(resume_id)
+        records = [evidence_for(term, structure, confirmations.get(normalize(term)))
+                   for term in requirements(resume["texto"])]
         return (
-            f"Cargo: {analise['cargo'] or '-'}\nÁrea: {analise['area'] or '-'}\n"
-            f"Senioridade: {analise['senioridade'] or '-'}\nHard skills: {analise['hard_skills'] or '-'}\n"
-            f"Pontos de melhoria: {analise['pontos_melhoria'] or '-'}\n"
-            f"Competências a validar (ausência no currículo não comprova lacuna): {analise['competencias_faltantes'] or '-'}\n"
-            f"Resumo: {analise['resumo'] or '-'}"
+            f"Perfil: {resume_id}\nCargo: {analysis['cargo'] or '-'}\nÁrea: {analysis['area'] or '-'}\n"
+            "Os registros abaixo são declarações do currículo, não verificação externa. "
+            "Curso, menção, negativa e conflito não comprovam experiência.\n"
+            + json.dumps(records, ensure_ascii=False)
         )
 
     def conversar(self, pergunta):
         pergunta = (pergunta or "").strip()
         if not pergunta:
             raise ValueError("Digite uma pergunta para o assistente.")
-        contexto = self._contexto()
+        analysis = self._perfil()
+        resume_id = analysis["resume_id"]
+        contexto = self._contexto(analysis)
         history_reader = getattr(self.db, "listar_mensagens_assistente", None)
-        messages = history_reader(limite=10) if history_reader else []
+        messages = history_reader(limite=10, resume_id=resume_id) if history_reader else []
         history = "\n".join(f"{row['role']}: {row['content'][:1500]}" for row in reversed(messages))
         objective_reader = getattr(self.db, "obter_objetivo_carreira", None)
-        objective = objective_reader() if objective_reader else ""
+        objective = objective_reader(resume_id) if objective_reader else ""
         resposta = None
         if self.llm.disponivel():
             prompt = (
@@ -57,12 +74,12 @@ class CareerAssistantService:
                 "Valide informações ausentes antes de definir lacunas de desenvolvimento.\n\n"
                 f"Sua pergunta: {pergunta}"
             )
-        self.db.salvar_mensagem_assistente("user", pergunta)
-        self.db.salvar_mensagem_assistente("assistant", resposta)
+        self.db.salvar_mensagem_assistente("user", pergunta, resume_id)
+        self.db.salvar_mensagem_assistente("assistant", resposta, resume_id)
         return resposta
 
     def proxima_pergunta(self, tema):
-        contexto = self._contexto()
+        contexto = self._contexto(self._perfil())
         if self.llm.disponivel():
             prompt = (
                 "Crie UMA pergunta de entrevista em português, objetiva e realista. "
@@ -82,6 +99,7 @@ class CareerAssistantService:
         return perguntas.get(tema, perguntas["RH"])
 
     def avaliar_resposta(self, pergunta, resposta, tema):
+        resume_id = self._perfil()["resume_id"]
         if not (resposta or "").strip():
             raise ValueError("Informe uma resposta para avaliação.")
         feedback = (
@@ -103,11 +121,11 @@ class CareerAssistantService:
                     nota, feedback = int(match.group(1)), candidate
             except Exception:
                 pass
-        self.db.salvar_entrevista(pergunta, resposta, feedback, nota, tema)
+        self.db.salvar_entrevista(pergunta, resposta, feedback, nota, tema, resume_id)
         return {"nota": nota, "feedback": feedback}
 
     def plano_de_acao(self):
-        analise = self.db.obter_analise_ativa()
+        analise = self._perfil()
         if not analise:
             return ["Importe e analise um currículo para gerar um plano personalizado."]
         itens = []

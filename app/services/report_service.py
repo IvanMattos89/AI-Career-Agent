@@ -113,6 +113,7 @@ class ReportService:
         for titulo, chave in (
             ("Competências encontradas", "competencias_encontradas"),
             ("Evidências textuais a validar", "evidencias"),
+            ("Abrangência: obrigatórios, desejáveis e condições", "abrangencia"),
             ("Lacunas confirmadas", "competencias_faltantes"),
             ("Competências não informadas / a validar", "competencias_nao_informadas"),
             ("Recomendações", "recomendacoes"),
@@ -153,6 +154,7 @@ class ReportService:
         for cabecalho, chave in (
             ("COMPETÊNCIAS ENCONTRADAS", "competencias_encontradas"),
             ("EVIDÊNCIAS TEXTUAIS A VALIDAR", "evidencias"),
+            ("ABRANGÊNCIA: OBRIGATÓRIOS, DESEJÁVEIS E CONDIÇÕES", "abrangencia"),
             ("LACUNAS CONFIRMADAS", "competencias_faltantes"),
             ("COMPETÊNCIAS NÃO INFORMADAS / A VALIDAR", "competencias_nao_informadas"),
             ("RECOMENDAÇÕES", "recomendacoes"),

@@ -20,6 +20,7 @@ def service_for(payload=None, text="Apuração de ICMS em SAP."):
     )
     service.db.obter_curriculo.return_value = {"texto": text}
     service.db.salvar_job_match.return_value = 1
+    service.db.listar_confirmacoes_competencias.return_value = {}
     service.analyzer = Mock()
     service.analyzer.llm.disponivel.return_value = payload is not None
     service.analyzer.comparar.return_value = json.dumps(payload)
@@ -101,7 +102,9 @@ def test_recommendations_do_not_increase_document_score():
 def test_chat_uses_recent_history_in_chronological_order_and_objective():
     service = CareerAssistantService.__new__(CareerAssistantService)
     service.db = Mock()
-    service.db.obter_analise_ativa.return_value = None
+    service.db.obter_analise_ativa.return_value = {"resume_id": 1, "cargo": "Fiscal", "area": "Fiscal"}
+    service.db.obter_curriculo.return_value = {"texto": "Apuração de ICMS."}
+    service.db.listar_confirmacoes_competencias.return_value = {}
     service.db.obter_objetivo_carreira.return_value = "Evoluir para Especialista"
     service.db.listar_mensagens_assistente.return_value = [
         {"role": "assistant", "content": "Resposta anterior"},
@@ -113,13 +116,14 @@ def test_chat_uses_recent_history_in_chronological_order_and_objective():
     prompt = service.llm.perguntar.call_args.args[0]
     assert prompt.index("Pergunta anterior") < prompt.index("Resposta anterior")
     assert "Evoluir para Especialista" in prompt
-    service.db.listar_mensagens_assistente.assert_called_once_with(limite=10)
+    service.db.listar_mensagens_assistente.assert_called_once_with(limite=10, resume_id=1)
 
 
 @pytest.mark.parametrize("answer", ["Sem nota", "NOTA: 120\nÓtimo", "NOTA: 70", "NOTA: 4.5\nTexto"])
 def test_invalid_interview_feedback_does_not_invent_score(answer):
     service = CareerAssistantService.__new__(CareerAssistantService)
     service.db = Mock()
+    service.db.obter_analise_ativa.return_value = {"resume_id": 1}
     service.llm = Mock()
     service.llm.perguntar.return_value = answer
     result = service.avaliar_resposta("Pergunta", "Resposta", "RH")
@@ -149,8 +153,8 @@ def test_pending_match_roundtrip_and_objective_persistence():
         assert db.dashboard_job_match_metricas()["media"] is None
         assert restored["recomendacao"] == "investigar"
         assert restored["competencias_nao_informadas"] == ["Python"]
-        db.salvar_objetivo_carreira("Especialista")
-        assert db.obter_objetivo_carreira() == "Especialista"
+        db.salvar_objetivo_carreira("Especialista", 1)
+        assert db.obter_objetivo_carreira(1) == "Especialista"
         db.criar_tabelas()  # migration remains idempotent
         assert db.obter_job_match(match_id) is not None
     finally:

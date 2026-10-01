@@ -1,4 +1,4 @@
-﻿from PySide6.QtWidgets import (
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
     QHeaderView,
@@ -143,7 +143,9 @@ class HistoryPage(QWidget):
             self,
             "Excluir currículo e dados derivados",
             "Esta ação removerá a cópia interna do currículo, análises, Job Matches, "
-            "candidaturas vinculadas e materiais gerados. O arquivo original não será apagado.\n\n"
+            "candidaturas, conversas, entrevistas, objetivo e confirmações vinculados, além dos materiais gerados. "
+            "Histórico legado sem perfil é removido separadamente na Central de Carreira. "
+            "O arquivo original não será apagado.\n\n"
             "Deseja continuar?"
         )
 

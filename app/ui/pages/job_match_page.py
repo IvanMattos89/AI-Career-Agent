@@ -225,8 +225,9 @@ class JobMatchPage(QWidget):
         self.faltantes = SectionCard("Lacunas confirmadas")
         self.pendentes = SectionCard("Competências não informadas / a validar")
         self.decisao = SectionCard("Recomendação e próximo passo")
+        self.abrangencia = SectionCard("Obrigatórios, desejáveis e condições — abrangência")
         self.recomendacoes = SectionCard("Recomendações")
-        for card in (self.score, self.explicacao, self.encontradas, self.faltantes, self.pendentes, self.decisao, self.recomendacoes):
+        for card in (self.score, self.explicacao, self.encontradas, self.faltantes, self.pendentes, self.decisao, self.abrangencia, self.recomendacoes):
             card.hide()
             layout.addWidget(card)
 
@@ -560,12 +561,13 @@ class JobMatchPage(QWidget):
         self.score.setScore(resultado["compatibilidade"])
         self.score.show()
         self.pendentes.setItems(resultado.get("competencias_nao_informadas", []))
+        self.abrangencia.setItems(resultado.get("abrangencia", ["Inventário não registrado; refaça a comparação."]))
         self.decisao.setText(
             f"{resultado.get('recomendacao', 'investigar').capitalize()}: "
             f"{resultado.get('justificativa', 'Registro anterior aos critérios atuais; refaça a comparação.')} "
             f"Próximo passo: {resultado.get('proximo_passo', 'Refazer a comparação.')}"
         )
-        for card in (self.explicacao, self.encontradas, self.faltantes, self.pendentes, self.decisao, self.recomendacoes):
+        for card in (self.explicacao, self.encontradas, self.faltantes, self.pendentes, self.decisao, self.abrangencia, self.recomendacoes):
             card.show()
         self.explicacao.setText(resultado["explicacao"])
         self.encontradas.setItems(resultado.get("evidencias") or resultado["competencias_encontradas"])

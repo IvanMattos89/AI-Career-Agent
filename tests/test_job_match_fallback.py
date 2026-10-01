@@ -5,6 +5,9 @@ from app.services.job_match_service import JobMatchService
 
 
 class _FakeDb:
+    def listar_confirmacoes_competencias(self, _resume_id):
+        return {}
+
     def __init__(self):
         self.saved = None
 
@@ -31,7 +34,11 @@ class _FailingLlm:
 class _FailingAnalyzer:
     llm = _FailingLlm()
 
-    def comparar(self, _prompt):
+    def __init__(self):
+        self.calls = []
+
+    def comparar(self, prompt, timeout=None):
+        self.calls.append((prompt, timeout))
         raise RuntimeError("timeout simulado")
 
 
@@ -62,8 +69,11 @@ class JobMatchFallbackTest(unittest.TestCase):
         result = service.comparar("A vaga exige Excel, ICMS e ERP.", "Analista Fiscal")
 
         self.assertEqual(result["id"], 99)
-        self.assertGreater(result["compatibilidade"], 0)
-        self.assertIn("Excel", result["competencias_encontradas"])
+        self.assertIsNone(result["compatibilidade"])
+        self.assertIn("Excel", result["competencias_nao_informadas"])
+        self.assertEqual(len(service.analyzer.calls), 1)
+        self.assertEqual(service.analyzer.calls[0][1], 20)
+        self.assertIn("A vaga exige Excel", service.analyzer.calls[0][0])
 
     def test_sends_full_career_evidence_to_ai_comparison(self):
         service = JobMatchService.__new__(JobMatchService)

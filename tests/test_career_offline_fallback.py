@@ -4,11 +4,17 @@ from app.services.career_assistant_service import CareerAssistantService
 
 
 class _Db:
+    def listar_confirmacoes_competencias(self, _resume_id):
+        return {}
+
     def obter_analise_ativa(self):
         return {
-            "cargo": "Analista Fiscal", "area": "Fiscal", "senioridade": "Pleno",
+            "resume_id": 1, "cargo": "Analista Fiscal", "area": "Fiscal", "senioridade": "Pleno",
             "hard_skills": "Excel; ICMS", "pontos_melhoria": "", "competencias_faltantes": "", "resumo": "",
         }
+
+    def obter_curriculo(self, _resume_id):
+        return {"texto": "Apuração de ICMS."}
 
     def salvar_mensagem_assistente(self, *_args):
         pass

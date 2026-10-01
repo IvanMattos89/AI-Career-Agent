@@ -15,7 +15,7 @@ class LocalAnalysisTest(unittest.TestCase):
         )
 
         self.assertEqual(resultado.cargo, "Analista Fiscal")
-        self.assertEqual(resultado.senioridade, "Sênior")
+        self.assertEqual(resultado.senioridade, "Não identificado")
         self.assertEqual(resultado.anos_experiencia, 10)
         self.assertIn("ICMS", resultado.hard_skills)
         self.assertIn("Inglês", resultado.idiomas)

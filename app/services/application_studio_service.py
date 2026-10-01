@@ -2,6 +2,7 @@ import json
 
 from app.ai.llm_client import LLMClient
 from app.database.sqlite_db import Database
+from app.services.evidence_service import evidence_for, requirements
 from app.services.resume_adaptation_service import ResumeAdaptationService
 from app.services.resume_structure_service import ResumeStructureService
 
@@ -29,9 +30,10 @@ class ApplicationStudioService:
         if not structure.get("sections"):
             structure = ResumeStructureService.from_text(resume_text)
         evidence = ResumeAdaptationService._evidence_matrix(
-            vaga["descricao"] or vaga["titulo"], structure
+            vaga["descricao"] or vaga["titulo"], ResumeStructureService.from_text(resume_text),
+            self.db.listar_confirmacoes_competencias(analise["resume_id"])
         )
-        proven = [item for item in evidence if item["status"] == "Comprovado"]
+        proven = [item for item in evidence if item["experiencia_sustentada"]]
         evidence_text = "\n".join(
             f"- {item['requisito']}: {item['evidencia']}" for item in proven
         ) or "Nenhum requisito específico comprovado."
@@ -47,7 +49,7 @@ Senioridade: {senioridade}
 Hard skills: {skills}
 Tecnologias: {tecnologias}
 Resumo: {resumo}
-Evidências verificadas no currículo:
+Experiências relatadas no currículo, sem verificação externa:
 {evidencias}
 
 VAGA
@@ -55,8 +57,8 @@ Título: {titulo}
 Empresa: {empresa}
 Descrição: {descricao}""".format(
                 cargo=analise["cargo"] or "", area=analise["area"] or "",
-                senioridade=analise["senioridade"] or "", skills=analise["hard_skills"] or "",
-                tecnologias=analise["tecnologias"] or "", resumo=analise["resumo"] or "",
+                senioridade=analise["senioridade"] or "", skills="; ".join(item["requisito"] for item in proven),
+                tecnologias="", resumo="",
                 evidencias=evidence_text,
                 titulo=vaga["titulo"], empresa=vaga["empresa"] or "", descricao=vaga["descricao"] or "",
             )
@@ -68,9 +70,8 @@ Descrição: {descricao}""".format(
                     " ".join(map(str, pacote.get("palavras_chave", []))),
                 ))
                 invented = [
-                    term for term in ResumeAdaptationService.MARKET_TERMS
-                    if ResumeAdaptationService._contains(term, generated)
-                    and not ResumeAdaptationService._contains(term, resume_text)
+                    term for term in requirements(generated)
+                    if not evidence_for(term, ResumeStructureService.from_text(resume_text))["experiencia_sustentada"]
                 ]
                 if invented:
                     pacote = None
@@ -79,7 +80,7 @@ Descrição: {descricao}""".format(
         if not pacote:
             empresa = vaga["empresa"] or "a empresa"
             cargo = analise["cargo"] or "profissional"
-            skills = [x.strip() for x in (analise["hard_skills"] or "").split(";") if x.strip()]
+            skills = [item["requisito"] for item in proven]
             pacote = {
                 "carta": f"Olá, equipe da {empresa}.\n\nTenho interesse na oportunidade de {vaga['titulo']}. Atuo como {cargo} e acredito que meu perfil pode contribuir para a posição.\n\nGostaria de conversar sobre como minhas experiências e competências se conectam às necessidades da vaga.",
                 "resumo_direcionado": f"{cargo} com foco em {analise['area'] or 'sua área de atuação'}. Destaque no currículo: {', '.join(skills[:4]) or 'experiências relevantes'}.",
