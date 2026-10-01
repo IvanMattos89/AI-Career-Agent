@@ -52,3 +52,12 @@
 
 - Busca unificada, decisões sobre vagas e pipeline de candidaturas.
 - Métricas de provedores, configurações e recursos locais de privacidade.
+
+
+## Busca: localização, consultas e diagnóstico — 2026-10-01
+
+- Municípios do IBGE disponíveis offline e aproveitamento da localização estruturada dos provedores; remoção do país brasileiro presumido na Gupy.
+- Vagas remotas nacionais independem do filtro de escritório; restrições regionais continuam aplicadas. Opção para incluir modalidade desconhecida.
+- Cargos configurados consultados primeiro, limite ajustável e lista explícita de consultas omitidas.
+- Diagnóstico persistido por busca e consolidado entre títulos, separando configuração, falhas, resposta vazia, filtros, duplicatas, descarte e limite; migração 9 preserva o histórico.
+- Sem alteração de paginação ou fontes habilitadas por padrão.

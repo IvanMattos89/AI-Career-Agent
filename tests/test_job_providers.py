@@ -26,7 +26,8 @@ class StructuredJobProvidersTest(unittest.TestCase):
 
         self.assertEqual(len(jobs), 1)
         self.assertEqual(jobs[0].provider, "Gupy")
-        self.assertIn("Brasil", jobs[0].location)
+        self.assertEqual(jobs[0].location_state, "SP")
+        self.assertEqual(jobs[0].location_country, "")
         self.assertEqual(get.call_args.kwargs["headers"]["Authorization"], "Bearer secret")
 
     @patch("app.services.job_providers.requests.get")

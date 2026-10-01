@@ -134,7 +134,7 @@ class ArbeitnowProvider(JobProvider):
             JobListing(
                 title=item.get("title") or "Vaga sem título",
                 company=item.get("company_name") or "Empresa não informada",
-                location="Remoto" if item.get("remote") else (item.get("location") or "Não informado"),
+                location=item.get("location") or "Não informado",
                 url=item.get("url") or "",
                 description=JobMatchService.limpar_descricao(item.get("description") or ""),
                 provider=self.name,
@@ -214,7 +214,7 @@ class LeverProvider(JobProvider):
                         provider=self.name,
                         external_id=item.get("id") or "",
                         employment_type=categories.get("commitment") or "Não informado",
-                        modality=categories.get("workplaceType") or "Não informado",
+                        modality=item.get("workplaceType") or categories.get("workplaceType") or "Não informado",
                     )
                 )
         return results
@@ -261,13 +261,16 @@ class GupyProvider(JobProvider):
             location = ", ".join(
                 str(value).strip() for value in (
                     item.get("addressCity"), item.get("addressState"),
-                    item.get("addressCountry") or "Brasil",
+                    item.get("addressCountry"),
                 ) if value
-            ) or "Brasil"
+            ) or "Não informado"
             results.append(JobListing(
                 title=title,
                 company=item.get("companyName") or item.get("careerPageName") or "Empresa Gupy",
                 location=location,
+                location_country=item.get("addressCountry") or "",
+                location_state=item.get("addressState") or "",
+                location_city=item.get("addressCity") or "",
                 url=item.get("jobUrl") or item.get("publicUrl") or item.get("careerPageUrl") or "",
                 description=description,
                 provider=self.name,
@@ -314,6 +317,7 @@ class AdzunaProvider(JobProvider):
                 title=item.get("title") or "Vaga sem título",
                 company=(item.get("company") or {}).get("display_name") or "Empresa não informada",
                 location=(item.get("location") or {}).get("display_name") or "Brasil",
+                location_country="BR",
                 url=item.get("redirect_url") or "",
                 description=JobMatchService.limpar_descricao(item.get("description") or ""),
                 provider=self.name,
@@ -350,7 +354,7 @@ class JoobleProvider(JobProvider):
             JobListing(
                 title=item.get("title") or "Vaga sem título",
                 company=item.get("company") or "Empresa não informada",
-                location=item.get("location") or "Brasil",
+                location=item.get("location") or "Não informado",
                 url=item.get("link") or "",
                 description=JobMatchService.limpar_descricao(item.get("snippet") or ""),
                 provider=self.name,

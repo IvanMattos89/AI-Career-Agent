@@ -158,3 +158,16 @@ Após instalar as dependências de desenvolvimento, execute:
 O executável é criado em `dist/AI-Career-Agent.exe`. Na versão empacotada, banco, currículos,
 relatórios e logs são armazenados em `%LOCALAPPDATA%\AI Career Agent`, evitando gravações em
 `Program Files`. Assinatura digital e instalador devem ser aplicados antes da distribuição pública.
+
+
+### Precisão e diagnóstico da busca
+
+A busca reconhece municípios sem UF com uma cópia local da [API de localidades do IBGE](https://servicodados.ibge.gov.br/api/docs/localidades), distribuída em `app/data/municipios_br.json` (5.571 municípios; fonte e data no arquivo). Não há geocodificação pela rede durante a busca. País, cidade e estado estruturados da fonte têm preferência; homônimos entre estados não recebem UF arbitrária. Nomes isolados são uma inferência geográfica: país desconhecido, cidades homônimas no exterior e restrições descritas apenas no corpo da vaga ainda exigem revisão.
+
+“Remoto — Brasil” continua elegível ao filtrar SP ou Campinas. Uma localização remota com cidade/UF explícita continua sujeita ao filtro regional; “Remoto” sem país e “Worldwide” não são automaticamente tratados como Brasil. Local de escritório não comprova autorização para trabalhar de qualquer lugar. Modalidade desconhecida só passa pelo filtro de modalidade quando a opção **Incluir modalidade não informada** está marcada.
+
+Os cargos configurados são consultados primeiro, inclusive equivalentes fora da lista fiscal. **Configurações → Busca de vagas → Máximo de consultas por busca** controla de 1 a 50 títulos (padrão 20); o diagnóstico informa títulos executados e omitidos. A busca personalizada consolida todas as consultas, sem confundir a última consulta com o conjunto da busca.
+
+O diagnóstico no Job Match diferencia fonte não configurada, falha, falha parcial, resposta vazia, eliminação por filtros e resultados disponíveis. Mostra motivos de filtro, duplicações, decisões de descarte e limite de resultados. Contagens recebidas somam consultas e podem repetir anúncios; a quantidade exibida é única após consolidação. Erros persistidos não contêm URLs ou credenciais. Dados anteriores à migração 9 continuam disponíveis no formato de métricas anterior.
+
+Esta etapa não adiciona novas fontes nem paginação: Adzuna, Jooble e Gupy continuam limitados à página inicial; o limite padrão da lista continua 25. LinkedIn e Indeed continuam como pesquisas no navegador. Testes dos provedores usam respostas simuladas e não comprovam disponibilidade ao vivo ou credenciais da instalação.

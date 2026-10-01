@@ -170,8 +170,13 @@ class SettingsPage(QWidget):
         self.target_titles = QLineEdit(os.getenv("JOB_TARGET_TITLES", ""))
         self.target_titles.setPlaceholderText("Analista Fiscal Sênior, Especialista Fiscal")
         profile_form.addRow("Cargos-alvo", self.target_titles)
+        self.max_search_queries = QComboBox()
+        self.max_search_queries.addItems([str(number) for number in range(1, 51)])
+        value = os.getenv("JOB_SEARCH_MAX_QUERIES", "20")
+        self.max_search_queries.setCurrentText(value if value.isdigit() and 1 <= int(value) <= 50 else "20")
+        profile_form.addRow("Máximo de consultas por busca", self.max_search_queries)
         profile_form.addRow("", self._helper(
-            "Separe os títulos por vírgula. Eles complementam os cargos identificados no currículo."
+            "Separe os títulos por vírgula. São consultados primeiro, seguidos dos cargos sugeridos, até o limite escolhido. O diagnóstico lista os títulos não executados."
         ))
         layout.addWidget(profile_group)
 
@@ -372,6 +377,7 @@ class SettingsPage(QWidget):
             "JOB_LEVER_SITES": self.lever_sites.text().strip(),
             "JOB_ENABLE_ARBEITNOW": "true" if self.enable_arbeitnow.isChecked() else "false",
             "JOB_TARGET_TITLES": self.target_titles.text().strip(),
+            "JOB_SEARCH_MAX_QUERIES": self.max_search_queries.currentText(),
             "GUPY_API_TOKEN": self.gupy_token.text().strip(),
             "ADZUNA_APP_ID": self.adzuna_id.text().strip(),
             "ADZUNA_APP_KEY": self.adzuna_key.text().strip(),

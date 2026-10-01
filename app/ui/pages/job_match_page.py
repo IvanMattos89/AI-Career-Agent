@@ -6,6 +6,7 @@ from PySide6.QtCore import QThread, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QComboBox,
     QFileDialog,
     QFrame,
@@ -124,6 +125,8 @@ class JobMatchPage(QWidget):
             acoes_busca.addWidget(botao)
         acoes_busca.addStretch()
         layout.addLayout(acoes_busca)
+        self.chkModalidadeDesconhecida = QCheckBox("Incluir modalidade não informada")
+        layout.addWidget(self.chkModalidadeDesconhecida)
         fontes_externas = QHBoxLayout()
         for botao in (
             self.btnGoogle, self.btnLinkedIn, self.btnIndeed, self.btnGupy, self.btnAbrirVaga,
@@ -338,6 +341,7 @@ class JobMatchPage(QWidget):
         self.search_worker = JobSearchWorker(
             termo, para_curriculo, self.cmbEstado.currentData(), self.txtCidade.text().strip(),
             self.cmbModalidade.currentData(), self.cmbSenioridade.currentData(),
+            incluir_modalidade_desconhecida=self.chkModalidadeDesconhecida.isChecked(),
         )
         self.search_worker.moveToThread(self.search_thread)
         self.search_thread.started.connect(self.search_worker.run)
@@ -380,6 +384,26 @@ class JobMatchPage(QWidget):
         summary = self.db.resumo_ultima_busca()
         if not summary:
             self.resumo_fontes.setText("Nenhuma métrica de busca disponível.")
+            return
+        diagnostic = summary.get("diagnostico")
+        if diagnostic:
+            parts = []
+            for item in diagnostic["fontes"]:
+                reasons = ", ".join(f"{escape(key)}: {count}" for key, count in item["filtros"].items() if count)
+                parts.append(
+                    f"<b>{escape(item['provider'])}</b>: {escape(item['status'])}; "
+                    f"{item['recebidas']} recebidas, {item['exibidas']} exibidas"
+                    + (f"; filtros — {reasons}" if reasons else "")
+                    + f"; {item['duplicadas']} duplicadas, {item['descartadas']} descartadas, {item['limite']} além do limite"
+                )
+            queries = ", ".join(escape(q) for q in diagnostic["consultas"])
+            omitted = ", ".join(escape(q) for q in diagnostic.get("consultas_omitidas", []))
+            text = "<br>".join(parts) + f"<br><b>Consultas executadas:</b> {queries}"
+            if omitted:
+                text += f"<br><b>Não executadas pelo limite de consultas:</b> {omitted}. Ajuste o limite em Configurações."
+            if diagnostic.get("nota"):
+                text += "<br>" + escape(diagnostic["nota"])
+            self.resumo_fontes.setText(text)
             return
         parts = []
         for metric in summary["providers"]:
@@ -487,6 +511,7 @@ class JobMatchPage(QWidget):
         self.status.setText(f"Pesquisa aberta em {fonte} para: {termo} — {local}.")
 
     def mostrar_erro_busca(self, mensagem):
+        self._mostrar_metricas_fontes()
         self.status.setText(f"Não foi possível atualizar vagas recomendadas: {mensagem}")
         if not self.busca_silenciosa:
             QMessageBox.critical(self, "Erro na busca de vagas", mensagem)
