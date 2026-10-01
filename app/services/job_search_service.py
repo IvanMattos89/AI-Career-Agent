@@ -5,29 +5,23 @@ import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
-import requests
-
 from app.database.sqlite_db import Database
 from app.models.job_listing import JobListing, normalize_text
+from app.services.job_location import ESTADOS_BRASIL, eligible, modality
 from app.services.job_providers import default_providers
 
 
 class JobSearchService:
     """Consulta fontes públicas de vagas sem scraping e filtra por relevância local."""
 
-    ESTADOS_BRASIL = {
-        "AC": "Acre", "AL": "Alagoas", "AP": "Amapá", "AM": "Amazonas", "BA": "Bahia",
-        "CE": "Ceará", "DF": "Distrito Federal", "ES": "Espírito Santo", "GO": "Goiás",
-        "MA": "Maranhão", "MT": "Mato Grosso", "MS": "Mato Grosso do Sul", "MG": "Minas Gerais",
-        "PA": "Pará", "PB": "Paraíba", "PR": "Paraná", "PE": "Pernambuco", "PI": "Piauí",
-        "RJ": "Rio de Janeiro", "RN": "Rio Grande do Norte", "RS": "Rio Grande do Sul",
-        "RO": "Rondônia", "RR": "Roraima", "SC": "Santa Catarina", "SP": "São Paulo",
-        "SE": "Sergipe", "TO": "Tocantins",
-    }
+    ESTADOS_BRASIL = ESTADOS_BRASIL
 
     def __init__(self, providers=None, db=None):
         self.providers = providers if providers is not None else default_providers()
         self.db = db or Database()
+        self._default_catalog = providers is None
+        self.last_report = {}
+        self._last_search_id = None
 
     # Títulos que aparecem com frequência em anúncios brasileiros.  Os termos
     # técnicos são combinados com as competências efetivamente extraídas do
@@ -90,43 +84,17 @@ class JobSearchService:
 
     @classmethod
     def _localizacao_elegivel(cls, localizacao, estado="", cidade=""):
-        """Aceita somente vagas explicitamente localizadas no Brasil."""
-        local = cls._normalizar(localizacao)
-        state_pattern = "|".join(sigla.lower() for sigla in cls.ESTADOS_BRASIL)
-        estado_na_localizacao = any(
-            re.search(rf"(?:/|,|\s-\s|\()\s*{sigla.lower()}\b", local)
-            for sigla in cls.ESTADOS_BRASIL
-        )
-        nome_estado_na_localizacao = any(
-            re.search(r"(?<![a-z])" + re.escape(cls._normalizar(nome)) + r"(?![a-z])", local)
-            for nome in cls.ESTADOS_BRASIL.values()
-        )
-        if (
-            "brasil" not in local and "brazil" not in local
-            and not estado_na_localizacao and not nome_estado_na_localizacao
-        ):
-            return False
-        if estado:
-            nome_estado = cls._normalizar(cls.ESTADOS_BRASIL.get(estado, estado))
-            sigla = re.search(
-                rf"(?:^|/|,|\s-\s|\()\s*({state_pattern})\b", local
-            )
-            if nome_estado not in local and (not sigla or sigla.group(1) != estado.lower()):
-                return False
-        if cidade and cls._normalizar(cidade) not in local:
-            return False
-        return True
+        return eligible(localizacao, estado, cidade)
 
     @classmethod
     def _modalidade_normalizada(cls, value):
-        normalized = cls._normalizar(value)
-        if any(term in normalized for term in ("remoto", "remote", "home office")):
-            return "remoto"
-        if any(term in normalized for term in ("hibrido", "hybrid")):
-            return "hibrido"
-        if any(term in normalized for term in ("presencial", "on site", "on-site", "onsite")):
-            return "presencial"
-        return normalized
+        return modality(value)
+
+    @staticmethod
+    def _listing_location_eligible(listing, estado="", cidade=""):
+        return eligible(listing.location, estado, cidade, country=listing.location_country,
+                        state=listing.location_state, city=listing.location_city,
+                        work_mode=listing.modality, remote_scope=listing.remote_scope)
 
     @staticmethod
     def _deduplicar(vagas):
@@ -198,82 +166,122 @@ class JobSearchService:
         except (TypeError, ValueError):
             return 0
 
+    def _provider_report(self):
+        active = list(dict.fromkeys(provider.name for provider in self.providers))
+        names = ["Vagas.com", "Remotive", "Adzuna", "Jooble", "Greenhouse", "Lever", "Gupy", "Arbeitnow"] if self._default_catalog else []
+        return {name: {"provider": name, "status": "aguardando" if name in active else "não configurada",
+                       "consultas": 0, "falhas": 0, "recebidas": 0, "elegiveis": 0,
+                       "exibidas": 0, "duplicadas": 0, "descartadas": 0, "limite": 0,
+                       "filtros": {"localização": 0, "modalidade": 0, "relevância": 0, "cargo excluído": 0}}
+                for name in dict.fromkeys([*names, *active])}
+
+    @staticmethod
+    def _diagnostic_status(report):
+        if report["status"] == "não configurada":
+            return
+        if report["falhas"]:
+            report["status"] = "falhou" if report["falhas"] == report["consultas"] else "falha parcial"
+        elif not report["recebidas"]:
+            report["status"] = "sem resultados"
+        elif not report["elegiveis"]:
+            report["status"] = "resultados eliminados por filtro"
+        elif not report["exibidas"]:
+            report["status"] = "resultados após filtros; fora da lista final"
+        else:
+            report["status"] = "resultados disponíveis"
+
+    def _save_report(self, report):
+        self.last_report = report
+        if self._last_search_id is not None:
+            self.db.salvar_diagnostico_busca(self._last_search_id, report)
+
     def buscar(
         self, termo, limite=25, estado="", cidade="", modalidade="", senioridade="",
-        ranking_terms=None,
+        ranking_terms=None, incluir_modalidade_desconhecida=False,
     ):
         termo = (termo or "").strip()
         if not termo:
             raise ValueError("Informe um cargo, área ou competência para buscar vagas.")
-        filters = {
-            "estado": estado, "cidade": cidade, "modalidade": modalidade,
-            "senioridade": senioridade,
-        }
-        search_id = self.db.iniciar_busca_vagas(
-            termo, filters, [provider.name for provider in self.providers]
-        )
-        candidates, errors = [], []
-        started = {provider: time.perf_counter() for provider in self.providers}
-        max_workers = max(1, min(6, len(self.providers)))
-        with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="job-provider") as pool:
-            futures = {pool.submit(provider.search, termo): provider for provider in self.providers}
-            for future in as_completed(futures):
-                provider = futures[future]
-                try:
-                    provider_results = future.result()
-                    candidates.extend(provider_results)
-                    eligible = sum(
-                        self._localizacao_elegivel(item.location, estado, cidade)
-                        for item in provider_results
-                    )
-                    self.db.registrar_metrica_provedor(
-                        search_id, provider.name, len(provider_results), eligible,
-                        round((time.perf_counter() - started[provider]) * 1000),
-                    )
-                except (requests.RequestException, ValueError, KeyError, TypeError) as error:
-                    errors.append(f"{provider.name}: {error}")
-                    self.db.registrar_metrica_provedor(
-                        search_id, provider.name,
-                        duration_ms=round((time.perf_counter() - started[provider]) * 1000),
-                        error=str(error),
-                    )
-        if not candidates:
-            self.db.concluir_busca_vagas(search_id, 0)
-            detail = "; ".join(errors) or "nenhum resultado publicado"
-            raise RuntimeError("Nenhuma fonte de vagas respondeu: " + detail)
-
+        limite = max(1, min(200, int(limite)))
+        filters = {"estado": estado, "cidade": cidade, "modalidade": modalidade,
+                   "senioridade": senioridade, "incluir_modalidade_desconhecida": incluir_modalidade_desconhecida}
+        search_id = self.db.iniciar_busca_vagas(termo, filters, [p.name for p in self.providers])
+        self._last_search_id = search_id
+        diagnostics = self._provider_report()
+        candidates = []
         terms = list(dict.fromkeys([*self._termos(termo), *(ranking_terms or [])]))
         terms = [normalize_text(item) for item in terms if normalize_text(item)]
         query_terms = self._termos(termo)
         minimum_terms = 2 if len(query_terms) > 1 else 1
-        results = []
-        for listing in self._deduplicar(candidates):
-            if not self._localizacao_elegivel(listing.location, estado, cidade):
-                continue
-            if modalidade and self._modalidade_normalizada(modalidade) != self._modalidade_normalizada(
-                listing.modality
-            ):
-                continue
-            content = normalize_text(f"{listing.title} {' '.join(listing.tags)} {listing.description}")
-            adherence = sum(normalize_text(item) in content for item in query_terms)
-            if listing.description and adherence >= minimum_terms:
-                listing.rank_score, listing.rank_explanation = self._ranking(
-                    listing, terms, estado, cidade, modalidade, senioridade
-                )
-                results.append(listing)
+        rejected = [normalize_text(item) for item in os.getenv("JOB_REJECTED_TITLES", "").split(",") if item.strip()]
+        started = {provider: time.perf_counter() for provider in self.providers}
+        with ThreadPoolExecutor(max_workers=max(1, min(6, len(self.providers))), thread_name_prefix="job-provider") as pool:
+            futures = {pool.submit(provider.search, termo): provider for provider in self.providers}
+            for future in as_completed(futures):
+                provider = futures[future]
+                report = diagnostics[provider.name]
+                report["consultas"] += 1
+                try:
+                    provider_results = future.result()
+                    report["recebidas"] = len(provider_results)
+                except Exception:
+                    # Never persist raw exception URLs: they may contain credentials.
+                    report["falhas"] += 1
+                    self.db.registrar_metrica_provedor(search_id, provider.name,
+                        duration_ms=round((time.perf_counter() - started[provider]) * 1000),
+                        error="Falha na consulta; verifique conexão e configuração da fonte.")
+                    continue
+                eligible_brazil = 0
+                for listing in provider_results:
+                    listing.provider = provider.name
+                    if not self._listing_location_eligible(listing, estado, cidade):
+                        report["filtros"]["localização"] += 1
+                        continue
+                    eligible_brazil += 1
+                    mode = modality(listing.modality) or modality(listing.location)
+                    if modalidade and mode != modality(modalidade) and (mode or not incluir_modalidade_desconhecida):
+                        report["filtros"]["modalidade"] += 1
+                        continue
+                    content = normalize_text(f"{listing.title} {' '.join(listing.tags)} {listing.description}")
+                    if any(re.search(rf"(?<!\w){re.escape(item)}(?!\w)", normalize_text(listing.title)) for item in rejected):
+                        report["filtros"]["cargo excluído"] += 1
+                        continue
+                    if not listing.description or sum(normalize_text(item) in content for item in query_terms) < minimum_terms:
+                        report["filtros"]["relevância"] += 1
+                        continue
+                    report["elegiveis"] += 1
+                    listing.rank_score, listing.rank_explanation = self._ranking(listing, terms, estado, cidade, modalidade, senioridade)
+                    candidates.append(listing)
+                self.db.registrar_metrica_provedor(search_id, provider.name, len(provider_results), eligible_brazil,
+                    round((time.perf_counter() - started[provider]) * 1000))
+        results = self._deduplicar(candidates)
+        retained_ids = {id(item) for item in results}
+        for listing in candidates:
+            if id(listing) not in retained_ids:
+                diagnostics[listing.provider]["duplicadas"] += 1
         results.sort(key=lambda item: (item.rank_score, len(item.description)), reverse=True)
-        output = []
+        output: list[dict] = []
         for position, listing in enumerate(results, start=1):
             item = listing.as_dict()
             listing_id, decision = self.db.salvar_vaga_encontrada(item, search_id, position)
+            report = diagnostics[listing.provider]
             if decision == "descartada":
+                report["descartadas"] += 1
                 continue
-            item["id"] = listing_id
-            item["decision"] = decision
-            output.append(item)
             if len(output) >= limite:
-                break
+                report["limite"] += 1
+                continue
+            item.update(id=listing_id, decision=decision)
+            output.append(item)
+            report["exibidas"] += 1
+        for report in diagnostics.values():
+            self._diagnostic_status(report)
         self.db.concluir_busca_vagas(search_id, len(output))
+        self._save_report({"consultas": [termo], "consultas_omitidas": [], "fontes": list(diagnostics.values()),
+                           "exibidas": len(output), "limite_resultados": limite})
+        active_reports = [r for r in diagnostics.values() if r["consultas"]]
+        if not active_reports or all(r["falhas"] == r["consultas"] for r in active_reports):
+            raise RuntimeError("Todas as fontes habilitadas falharam ou nenhuma está configurada. Consulte o diagnóstico por fonte.")
         return output
 
     @staticmethod
@@ -312,6 +320,8 @@ class JobSearchService:
         custom_titles = [
             item.strip() for item in os.getenv("JOB_TARGET_TITLES", "").split(",") if item.strip()
         ]
+        acceptable = [item.strip() for item in os.getenv("JOB_ACCEPTABLE_TITLES", "").split(",") if item.strip()]
+        custom_titles = list(dict.fromkeys([*custom_titles, *acceptable]))
         titles = list(dict.fromkeys([*custom_titles, *perfil["titulos"]]))
         source_queries = list(dict.fromkeys([*custom_titles, *perfil["consultas_fontes"]]))
         proven = habilidades[:12]
@@ -333,31 +343,37 @@ class JobSearchService:
         return self.recomendacao_para_curriculo()["principal"]
 
     def buscar_para_curriculo(
-        self, limite=25, estado="", cidade="", modalidade="", senioridade=""
+        self, limite=25, estado="", cidade="", modalidade="", senioridade="",
+        incluir_modalidade_desconhecida=False, max_consultas=None,
     ):
         recomendacao = self.recomendacao_para_curriculo()
+        limite = max(1, min(200, int(limite)))
         errors, all_jobs, used_queries = [], [], []
-        # Consulta todos os títulos equivalentes: parar no primeiro resultado
-        # escondia oportunidades mais aderentes publicadas por outra fonte.
-        available = list(dict.fromkeys(
-            [recomendacao["principal"], *recomendacao["consultas_fontes"]]
-        ))
-        consultas = [recomendacao["principal"]]
-        if any("sap" in item.casefold() for item in recomendacao["palavras_chave"]):
-            consultas.extend(item for item in available if "sap fiscal" in item.casefold())
-        for preferred in ("Analista Tributário", "Especialista Fiscal", "tax accountant", "accountant"):
-            if preferred in available:
-                consultas.append(preferred)
-        consultas = list(dict.fromkeys(consultas))[:6]
+        available = []
+        seen = set()
+        for item in [*recomendacao["consultas_fontes"], recomendacao["principal"]]:
+            key = normalize_text(item)
+            if key and key not in seen:
+                available.append(item)
+                seen.add(key)
+        try:
+            query_limit = max(1, min(50, int(max_consultas if max_consultas is not None else os.getenv("JOB_SEARCH_MAX_QUERIES", "20"))))
+        except (TypeError, ValueError):
+            query_limit = 20
+        consultas, omitted = available[:query_limit], available[query_limit:]
+        reports = []
         for consulta in dict.fromkeys(consultas):
             try:
                 vagas = self.buscar(
                     consulta, limite, estado, cidade, modalidade, senioridade,
                     ranking_terms=recomendacao["palavras_chave"],
+                    incluir_modalidade_desconhecida=incluir_modalidade_desconhecida,
                 )
             except RuntimeError as erro:
                 errors.append(str(erro))
-                continue
+                vagas = []
+            if self.last_report:
+                reports.append(self.last_report)
             if vagas:
                 used_queries.append(consulta)
                 all_jobs.extend(vagas)
@@ -376,9 +392,39 @@ class JobSearchService:
             unique.values(), key=lambda item: (item.get("rank_score", 0), len(item.get("descricao", ""))),
             reverse=True,
         )[:limite]
-        if not jobs and errors:
-            raise RuntimeError("Nenhuma fonte de vagas respondeu: " + "; ".join(dict.fromkeys(errors)))
+        if reports:
+            combined = self._provider_report()
+            for query_report in reports:
+                for source in query_report["fontes"]:
+                    target = combined[source["provider"]]
+                    for key in ("consultas", "falhas", "recebidas", "elegiveis", "duplicadas", "descartadas", "limite"):
+                        target[key] += source[key]
+                    for key, count in source["filtros"].items():
+                        target["filtros"][key] += count
+            unique_objects = {id(job) for job in unique.values()}
+            displayed_objects = {id(job) for job in jobs}
+            for job in all_jobs:
+                provider = job.get("provider") or job.get("fonte")
+                if provider in combined and id(job) not in unique_objects:
+                    combined[provider]["duplicadas"] += 1
+            for job in unique.values():
+                provider = job.get("provider") or job.get("fonte")
+                if provider in combined and id(job) not in displayed_objects:
+                    combined[provider]["limite"] += 1
+            for job in jobs:
+                provider = job.get("provider") or job.get("fonte")
+                if provider in combined:
+                    combined[provider]["exibidas"] += 1
+            for report in combined.values():
+                self._diagnostic_status(report)
+            self._save_report({"consultas": consultas, "consultas_omitidas": omitted,
+                               "fontes": list(combined.values()), "exibidas": len(jobs),
+                               "limite_resultados": limite,
+                               "nota": "Contagens somam consultas e podem repetir vagas; exibidas são únicas após ranking e limite."})
+        if not jobs and errors and len(errors) == len(consultas):
+            raise RuntimeError("As buscas personalizadas falharam. Consulte o diagnóstico por fonte.")
         return {
             "termo": recomendacao["principal"], "recomendacao": recomendacao,
             "consulta_utilizada": ", ".join(used_queries) or None, "vagas": jobs,
+            "consultas_executadas": consultas, "consultas_omitidas": omitted,
         }

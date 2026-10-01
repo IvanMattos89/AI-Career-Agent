@@ -3,7 +3,7 @@
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 hiddenimports = collect_submodules("PySide6")
-datas = collect_data_files("reportlab")
+datas = collect_data_files("reportlab") + [("app/data/municipios_br.json", "app/data")]
 
 a = Analysis(
     ["run.py"],

@@ -59,7 +59,7 @@ class JobSearchWorker(QObject):
 
     def __init__(
         self, termo=None, para_curriculo=False, estado="", cidade="",
-        modalidade="", senioridade="",
+        modalidade="", senioridade="", incluir_modalidade_desconhecida=False,
     ):
         super().__init__()
         self.termo = termo
@@ -68,6 +68,7 @@ class JobSearchWorker(QObject):
         self.cidade = cidade
         self.modalidade = modalidade
         self.senioridade = senioridade
+        self.incluir_modalidade_desconhecida = incluir_modalidade_desconhecida
 
     @Slot()
     def run(self):
@@ -79,12 +80,14 @@ class JobSearchWorker(QObject):
                 resultado = service.buscar_para_curriculo(
                     estado=self.estado, cidade=self.cidade,
                     modalidade=self.modalidade, senioridade=self.senioridade,
+                    incluir_modalidade_desconhecida=self.incluir_modalidade_desconhecida,
                 )
                 self.finished.emit(resultado["vagas"])
             else:
                 self.finished.emit(service.buscar(
                     self.termo, estado=self.estado, cidade=self.cidade,
                     modalidade=self.modalidade, senioridade=self.senioridade,
+                    incluir_modalidade_desconhecida=self.incluir_modalidade_desconhecida,
                 ))
         except Exception as erro:
             self.failed.emit(str(erro))

@@ -327,6 +327,19 @@ class Database:
             self._migracao_perfis_e_evidencias(cursor)
             cursor.execute("INSERT INTO schema_migrations(version, name) VALUES(8, 'perfis_e_evidencias')")
 
+        if 9 not in aplicadas:
+            self._migracao_diagnostico_busca(cursor)
+            cursor.execute("INSERT INTO schema_migrations(version, name) VALUES(9, 'diagnostico_busca')")
+
+    @staticmethod
+    def _migracao_diagnostico_busca(cursor):
+        cursor.execute("ALTER TABLE job_searches ADD COLUMN diagnostics_json TEXT NOT NULL DEFAULT '{}'")
+
+    def salvar_diagnostico_busca(self, search_id, report):
+        self.conn.execute("UPDATE job_searches SET diagnostics_json=? WHERE id=?",
+                          (json.dumps(report, ensure_ascii=False), search_id))
+        self.conn.commit()
+
     @staticmethod
     def _migracao_busca_e_pipeline(cursor):
         cursor.execute("""
@@ -856,7 +869,8 @@ class Database:
             JOIN job_listings listing ON listing.id=result.listing_id
             WHERE result.search_id=? AND listing.decision='descartada'
         """, (search["id"],)).fetchone()[0]
-        return {"search": search, "providers": providers, "discarded": discarded}
+        return {"search": search, "providers": providers, "discarded": discarded,
+                "diagnostico": json.loads(search["diagnostics_json"])}
 
     def salvar_vaga_encontrada(self, vaga, search_id=None, position=0):
         """Insere ou atualiza uma vaga normalizada sem perder decisões do usuário."""

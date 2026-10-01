@@ -62,6 +62,10 @@ class JobListing:
     url: str = ""
     description: str = ""
     provider: str = "Manual"
+    location_country: str = ""
+    location_state: str = ""
+    location_city: str = ""
+    remote_scope: str = ""
     external_id: str = ""
     tags: list[str] = field(default_factory=list)
     modality: str = "Não informado"
