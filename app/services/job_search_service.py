@@ -161,7 +161,10 @@ class JobSearchService:
             published = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
             if published.tzinfo is None:
                 published = published.replace(tzinfo=timezone.utc)
-            days = (datetime.now(timezone.utc) - published).days
+            days = (datetime.now(timezone.utc) - published).total_seconds() / 86400
+            if days < 0:
+                # Datas futuras não comprovam publicação recente.
+                return 0
             return 5 if days <= 30 else (2 if days <= 90 else 0)
         except (TypeError, ValueError):
             return 0
