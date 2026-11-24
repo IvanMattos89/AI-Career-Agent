@@ -1,6 +1,8 @@
-﻿from PySide6.QtWidgets import QGridLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QGridLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from app.services.dashboard_service import DashboardService
+from app.services.opportunity_tracking import OpportunityTracking
+from app.ui.opportunity_report import OpportunityReport
 from app.ui.widgets.info_card import InfoCard
 from app.ui.widgets.recent_analysis_card import RecentAnalysisCard
 
@@ -45,6 +47,12 @@ class DashboardPage(QWidget):
             grid.setColumnStretch(i,1)
 
         self.layout.addLayout(grid)
+        self.opportunity_summary = QLabel()
+        self.opportunity_summary.setWordWrap(True)
+        self.layout.addWidget(self.opportunity_summary)
+        report = QPushButton("Ver oportunidades, confirmações e exportar relatório")
+        report.clicked.connect(lambda: OpportunityReport(self.service.db, self).exec())
+        self.layout.addWidget(report)
 
         tituloHistorico = QLabel("Últimas análises")
         tituloHistorico.setObjectName("sectionTitle")
@@ -73,6 +81,14 @@ class DashboardPage(QWidget):
         self.cardAcompanhamentos.setValue(str(dados["acompanhamentos"]))
         self.cardFonte.setValue(dados["melhor_fonte"])
 
+        tracker = OpportunityTracking(self.service.db)
+        rows = tracker.report()
+        pipeline = tracker.pipeline(self.service.db.obter_curriculo_ativo_id())
+        self.opportunity_summary.setText(
+            f"Currículo ativo: {pipeline['oportunidades']} oportunidades, {pipeline['candidaturas']} candidaturas, "
+            f"{pipeline['entrevistas']} entrevistas em curso. Catálogo: {len(rows)} vagas, "
+            f"{sum(r['availability'] == 'pendente' for r in rows)} pendentes de confirmação."
+        )
         self.carregar_historico()
 
 

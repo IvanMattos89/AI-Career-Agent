@@ -28,7 +28,9 @@ from app.database.sqlite_db import Database
 from app.services.job_search_service import JobSearchService
 from app.services.report_service import ReportService
 from app.services.resume_adaptation_service import ResumeAdaptationService
+from app.ui.opportunity_report import OpportunityReport
 from app.ui.resume_preview_dialog import ResumePreviewDialog
+from app.ui.widgets.opportunity_controls import OpportunityControls
 from app.ui.widgets.score_card import ScoreCard
 from app.ui.widgets.section_card import SectionCard
 from app.ui.workers import (
@@ -127,6 +129,11 @@ class JobMatchPage(QWidget):
         layout.addLayout(acoes_busca)
         self.chkModalidadeDesconhecida = QCheckBox("Incluir modalidade não informada")
         layout.addWidget(self.chkModalidadeDesconhecida)
+        self.opportunity_controls = OpportunityControls()
+        layout.addWidget(self.opportunity_controls)
+        self.btnRelatorioOportunidades = QPushButton("Relatório de oportunidades e confirmações")
+        self.btnRelatorioOportunidades.clicked.connect(lambda: OpportunityReport(self.db, self).exec())
+        layout.addWidget(self.btnRelatorioOportunidades)
         fontes_externas = QHBoxLayout()
         for botao in (
             self.btnGoogle, self.btnLinkedIn, self.btnIndeed, self.btnGupy, self.btnAbrirVaga,
@@ -134,9 +141,9 @@ class JobMatchPage(QWidget):
             fontes_externas.addWidget(botao)
         fontes_externas.addStretch()
         layout.addLayout(fontes_externas)
-        self.resultados_busca = QTableWidget(0, 7)
+        self.resultados_busca = QTableWidget(0, 9)
         self.resultados_busca.setHorizontalHeaderLabels(
-            ["Vaga", "Empresa", "Localização", "Fonte", "Ranking", "Decisão", "Match"]
+            ["Vaga", "Empresa", "Localização", "Fonte", "Ordenação", "Decisão", "Match", "Remuneração", "Multinacional"]
         )
         self.resultados_busca.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.resultados_busca.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -342,6 +349,7 @@ class JobMatchPage(QWidget):
             termo, para_curriculo, self.cmbEstado.currentData(), self.txtCidade.text().strip(),
             self.cmbModalidade.currentData(), self.cmbSenioridade.currentData(),
             incluir_modalidade_desconhecida=self.chkModalidadeDesconhecida.isChecked(),
+            opcoes=self.opportunity_controls.options(),
         )
         self.search_worker.moveToThread(self.search_thread)
         self.search_thread.started.connect(self.search_worker.run)
@@ -367,6 +375,10 @@ class JobMatchPage(QWidget):
             self.resultados_busca.setItem(linha, 4, ranking)
             self.resultados_busca.setItem(linha, 5, QTableWidgetItem(vaga.get("decision", "nova").title()))
             self.resultados_busca.setItem(linha, 6, QTableWidgetItem("Pendente"))
+            salary = QTableWidgetItem(vaga.get("salary") or "Não informada")
+            salary.setToolTip(vaga.get("salary_assessment", {}).get("status", "A confirmar"))
+            self.resultados_busca.setItem(linha, 7, salary)
+            self.resultados_busca.setItem(linha, 8, QTableWidgetItem(vaga.get("company_evidence", {}).get("label", "A confirmar")))
         self.btnCompararTodas.setEnabled(bool(vagas))
         self._mostrar_metricas_fontes()
         if not vagas:

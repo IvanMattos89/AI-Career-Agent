@@ -9,6 +9,7 @@ from app.database.sqlite_db import Database
 from app.models.job_listing import JobListing, normalize_text
 from app.services.job_location import ESTADOS_BRASIL, eligible, modality
 from app.services.job_providers import default_providers
+from app.services.opportunity_tracking import FISCAL_QUERIES, OpportunityTracking, salary_assessment
 
 
 class JobSearchService:
@@ -49,6 +50,7 @@ class JobSearchService:
             # fiscais como "tax accountant".
             "consultas_fontes": [
                 "Analista Fiscal", "Analista Tributário", "Especialista Fiscal",
+                "Analista Fiscal Sênior", "Especialista Tributário", "Analista Tributário Sênior",
                 "Indirect Tax Analyst", "Tax Compliance Analyst", "Consultor SAP Fiscal",
                 "tax accountant", "accountant",
             ],
@@ -172,7 +174,7 @@ class JobSearchService:
         return {name: {"provider": name, "status": "aguardando" if name in active else "não configurada",
                        "consultas": 0, "falhas": 0, "recebidas": 0, "elegiveis": 0,
                        "exibidas": 0, "duplicadas": 0, "descartadas": 0, "limite": 0,
-                       "filtros": {"localização": 0, "modalidade": 0, "relevância": 0, "cargo excluído": 0}}
+                       "filtros": {"localização": 0, "modalidade": 0, "relevância": 0, "cargo excluído": 0, "remuneração": 0, "encerrada": 0}}
                 for name in dict.fromkeys([*names, *active])}
 
     @staticmethod
@@ -198,13 +200,18 @@ class JobSearchService:
     def buscar(
         self, termo, limite=25, estado="", cidade="", modalidade="", senioridade="",
         ranking_terms=None, incluir_modalidade_desconhecida=False,
+        salario_minimo=0, incluir_salario_desconhecido=True, priorizar_multinacionais=False,
     ):
         termo = (termo or "").strip()
         if not termo:
             raise ValueError("Informe um cargo, área ou competência para buscar vagas.")
+        salary_assessment("", salario_minimo, incluir_salario_desconhecido)
+        tracker = OpportunityTracking(self.db)
         limite = max(1, min(200, int(limite)))
         filters = {"estado": estado, "cidade": cidade, "modalidade": modalidade,
-                   "senioridade": senioridade, "incluir_modalidade_desconhecida": incluir_modalidade_desconhecida}
+                   "senioridade": senioridade, "incluir_modalidade_desconhecida": incluir_modalidade_desconhecida,
+                   "salario_minimo": salario_minimo, "incluir_salario_desconhecido": incluir_salario_desconhecido,
+                   "priorizar_multinacionais": priorizar_multinacionais}
         search_id = self.db.iniciar_busca_vagas(termo, filters, [p.name for p in self.providers])
         self._last_search_id = search_id
         diagnostics = self._provider_report()
@@ -249,6 +256,9 @@ class JobSearchService:
                     if not listing.description or sum(normalize_text(item) in content for item in query_terms) < minimum_terms:
                         report["filtros"]["relevância"] += 1
                         continue
+                    if not salary_assessment(listing.salary, salario_minimo, incluir_salario_desconhecido)["eligible"]:
+                        report["filtros"]["remuneração"] += 1
+                        continue
                     report["elegiveis"] += 1
                     listing.rank_score, listing.rank_explanation = self._ranking(listing, terms, estado, cidade, modalidade, senioridade)
                     candidates.append(listing)
@@ -259,12 +269,20 @@ class JobSearchService:
         for listing in candidates:
             if id(listing) not in retained_ids:
                 diagnostics[listing.provider]["duplicadas"] += 1
-        results.sort(key=lambda item: (item.rank_score, len(item.description)), reverse=True)
+        results.sort(key=lambda item: (priorizar_multinacionais and tracker.company(item.company, item.description)["prioritize"], item.rank_score, len(item.description)), reverse=True)
         output: list[dict] = []
         for position, listing in enumerate(results, start=1):
             item = listing.as_dict()
+            known = self.db.conn.execute("SELECT id FROM job_listings WHERE canonical_key=?", (listing.canonical_key,)).fetchone()
             listing_id, decision = self.db.salvar_vaga_encontrada(item, search_id, position)
+            tracker.observe(listing_id, search_id, bool(known), sum(v.canonical_key == listing.canonical_key for v in candidates))
+            item["company_evidence"] = tracker.company(listing.company, listing.description)
+            item["salary_assessment"] = salary_assessment(listing.salary, salario_minimo, incluir_salario_desconhecido)
+            item["availability"] = tracker.availability(listing_id)
             report = diagnostics[listing.provider]
+            if item["availability"] == "encerrada":
+                report["filtros"]["encerrada"] += 1
+                continue
             if decision == "descartada":
                 report["descartadas"] += 1
                 continue
@@ -345,8 +363,11 @@ class JobSearchService:
     def buscar_para_curriculo(
         self, limite=25, estado="", cidade="", modalidade="", senioridade="",
         incluir_modalidade_desconhecida=False, max_consultas=None,
+        salario_minimo=0, incluir_salario_desconhecido=True, priorizar_multinacionais=False, perfil_fiscal=False,
     ):
         recomendacao = self.recomendacao_para_curriculo()
+        if perfil_fiscal:
+            recomendacao["consultas_fontes"] = list(dict.fromkeys([*FISCAL_QUERIES, *recomendacao["consultas_fontes"]]))
         limite = max(1, min(200, int(limite)))
         errors, all_jobs, used_queries = [], [], []
         available = []
@@ -368,6 +389,8 @@ class JobSearchService:
                     consulta, limite, estado, cidade, modalidade, senioridade,
                     ranking_terms=recomendacao["palavras_chave"],
                     incluir_modalidade_desconhecida=incluir_modalidade_desconhecida,
+                    salario_minimo=salario_minimo, incluir_salario_desconhecido=incluir_salario_desconhecido,
+                    priorizar_multinacionais=priorizar_multinacionais,
                 )
             except RuntimeError as erro:
                 errors.append(str(erro))
@@ -389,7 +412,7 @@ class JobSearchService:
             if current is None or job.get("rank_score", 0) > current.get("rank_score", 0):
                 unique[key] = job
         jobs = sorted(
-            unique.values(), key=lambda item: (item.get("rank_score", 0), len(item.get("descricao", ""))),
+            unique.values(), key=lambda item: (priorizar_multinacionais and item.get("company_evidence", {}).get("prioritize", False), item.get("rank_score", 0), len(item.get("descricao", ""))),
             reverse=True,
         )[:limite]
         if reports:

@@ -59,9 +59,10 @@ class JobSearchWorker(QObject):
 
     def __init__(
         self, termo=None, para_curriculo=False, estado="", cidade="",
-        modalidade="", senioridade="", incluir_modalidade_desconhecida=False,
+        modalidade="", senioridade="", incluir_modalidade_desconhecida=False, opcoes=None,
     ):
         super().__init__()
+        self.opcoes = dict(opcoes or {})
         self.termo = termo
         self.para_curriculo = para_curriculo
         self.estado = estado
@@ -78,14 +79,14 @@ class JobSearchWorker(QObject):
             service = JobSearchService()
             if self.para_curriculo:
                 resultado = service.buscar_para_curriculo(
-                    estado=self.estado, cidade=self.cidade,
+                    **self.opcoes, estado=self.estado, cidade=self.cidade,
                     modalidade=self.modalidade, senioridade=self.senioridade,
                     incluir_modalidade_desconhecida=self.incluir_modalidade_desconhecida,
                 )
                 self.finished.emit(resultado["vagas"])
             else:
                 self.finished.emit(service.buscar(
-                    self.termo, estado=self.estado, cidade=self.cidade,
+                    self.termo, **{k: v for k, v in self.opcoes.items() if k != "perfil_fiscal"}, estado=self.estado, cidade=self.cidade,
                     modalidade=self.modalidade, senioridade=self.senioridade,
                     incluir_modalidade_desconhecida=self.incluir_modalidade_desconhecida,
                 ))

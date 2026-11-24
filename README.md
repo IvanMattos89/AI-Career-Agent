@@ -171,3 +171,18 @@ Os cargos configurados são consultados primeiro, inclusive equivalentes fora da
 O diagnóstico no Job Match diferencia fonte não configurada, falha, falha parcial, resposta vazia, eliminação por filtros e resultados disponíveis. Mostra motivos de filtro, duplicações, decisões de descarte e limite de resultados. Contagens recebidas somam consultas e podem repetir anúncios; a quantidade exibida é única após consolidação. Erros persistidos não contêm URLs ou credenciais. Dados anteriores à migração 9 continuam disponíveis no formato de métricas anterior.
 
 Esta etapa não adiciona novas fontes nem paginação: Adzuna, Jooble e Gupy continuam limitados à página inicial; o limite padrão da lista continua 25. LinkedIn e Indeed continuam como pesquisas no navegador. Testes dos provedores usam respostas simuladas e não comprovam disponibilidade ao vivo ou credenciais da instalação.
+
+
+### Busca fiscal e acompanhamento de oportunidades (24/11/2026)
+
+Em **Buscar vagas**, ative o foco Fiscal Sênior / Especialista Tributário para consultar também equivalentes em português e inglês. O foco é opcional e não modifica o perfil de outros usuários. A busca para currículo mantém o limite de consultas configurado e informa omissões; o máximo de resultados da tela pode variar de 1 a 200. A ampliação é de consultas e resultados nas fontes já configuradas, sem novos catálogos ou paginação adicional.
+
+O mínimo financeiro compara somente remuneração mensal explicitamente divulgada em BRL. Ausência de moeda/período, valores anuais, outras moedas e componentes variáveis ficam a confirmar; a opção de incluir remuneração desconhecida vem marcada. Faixas que cruzam o mínimo continuam como negociação a confirmar. Não há conversão de regime CLT/PJ nem estimativa de salário não divulgado.
+
+A preferência por multinacionais altera a ordenação da busca, sem aumentar a nota do Job Match. Uma menção no anúncio é apenas indicação. Abra **Relatório de oportunidades e confirmações → Registrar evidência da empresa** para registrar classificação, fonte, data e trecho comprobatório. Somente registros positivos com até 180 dias recebem prioridade. Essa confirmação é registrada pelo usuário; o aplicativo não verifica automaticamente o site da empresa.
+
+O relatório apresenta novas descobertas e repetições por período, encerradas com evidência e pendentes de confirmação. Repetições incluem reaparições em consultas diferentes e anúncios unidos pela chave de deduplicação já usada no projeto; são contagens de observações, não candidaturas extras. Disponibilidade não é inferida pela ausência em buscas limitadas. Confirmações de vaga aberta com mais de 30 dias voltam a pendentes; encerradas só voltam mediante novo registro. Vagas encerradas confirmadas são excluídas dos resultados futuros, mantendo seu histórico. Registros anteriores à migração não são chamados de novas descobertas.
+
+O catálogo é compartilhado. No dashboard e no relatório, o resumo adicional de oportunidades, candidaturas e entrevistas em curso usa o currículo ativo; entrevista simulada não conta como processo seletivo. Os cards anteriores mantêm suas métricas globais. O CSV exporta a seleção atual com fonte/data de disponibilidade e classificação da empresa. A migração 12 adiciona as tabelas sem apagar dados (10 e 11 são reservadas ao trabalho local existente).
+
+A aderência continua usando a camada comum de evidências do currículo e a decisão priorizar/investigar/descartar do Job Match. Filtros de busca e prioridade empresarial não constituem comprovação de competência. Nenhuma candidatura ou mensagem é enviada por estes controles.
