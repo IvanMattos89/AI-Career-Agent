@@ -30,15 +30,15 @@ def salary_assessment(text, minimum=0, include_unknown=True):
     if isinstance(minimum, bool) or not isinstance(minimum, (int, float)) or not math.isfinite(minimum) or minimum < 0:
         raise ValueError("Informe remuneração mínima válida.")
     normalized = normalize_text(text)
-    monthly = bool(re.search(r"/mes|mensal|por mes|ao mes", normalized))
+    monthly = bool(re.search(r"/mes|mensal|mensais|por mes|ao mes", normalized))
     brl = "r$" in normalized or "brl" in normalized
     ambiguous = bool(re.search(r"anual|/ano|por ano|hora|usd|eur|bonus|variavel|\+", normalized))
     values = re.findall(r"\d{1,3}(?:\.\d{3})+(?:,\d{2})?|\d+(?:,\d{2})?", normalized)
     if not monthly or not brl or ambiguous or not 1 <= len(values) <= 2:
-        return {"eligible": not minimum or include_unknown, "status": "A confirmar: moeda, período ou valor não comparável", "min": None, "max": None}
+        return {"eligible": include_unknown, "status": "A confirmar: moeda, período ou valor não comparável", "min": None, "max": None}
     amounts = [float(v.replace(".", "").replace(",", ".")) for v in values]
     if "mil" in normalized or "k" in normalized or min(amounts) <= 0:
-        return {"eligible": not minimum or include_unknown, "status": "A confirmar: formato de remuneração", "min": None, "max": None}
+        return {"eligible": include_unknown, "status": "A confirmar: formato de remuneração", "min": None, "max": None}
     low = min(amounts)
     high: float | None = max(amounts)
     if re.search(r"a partir|desde|acima de", normalized) and len(amounts) == 1:

@@ -41,6 +41,8 @@ def service(db, jobs):
     ("USD 10.000 por mês", 8000, False, False),
     ("8000 - 10000", 8000, False, False),
     ("", 8000, True, True),
+    ("", 0, False, False),
+    ("R$ 8.000 mensais", 8000, False, True),
     ("R$ 8 mil mensais", 8000, False, False),
     ("R$ 5.000 + R$ 1.000 de benefícios por mês", 5500, False, False),
     ("A partir de R$ 8.000 por mês", 10000, False, True),
