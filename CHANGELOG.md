@@ -61,3 +61,12 @@
 - Cargos configurados consultados primeiro, limite ajustável e lista explícita de consultas omitidas.
 - Diagnóstico persistido por busca e consolidado entre títulos, separando configuração, falhas, resposta vazia, filtros, duplicatas, descarte e limite; migração 9 preserva o histórico.
 - Sem alteração de paginação ou fontes habilitadas por padrão.
+
+
+## Oportunidades fiscais e acompanhamento — 2026-11-24
+
+- Foco fiscal opcional com cargos sênior/especialista e equivalentes; limite de resultados ajustável.
+- Filtro de remuneração mensal BRL com tratamento explícito de valores desconhecidos e faixas negociáveis.
+- Prioridade para multinacionais sustentada por registro de fonte/data, sem alterar aderência técnica.
+- Relatório filtrável e CSV de novas descobertas, repetições, encerramentos confirmados e disponibilidade pendente.
+- Resumo de oportunidades, candidaturas e entrevistas em curso por currículo no dashboard; migração 12 preserva dados anteriores.

@@ -331,6 +331,12 @@ class Database:
             self._migracao_diagnostico_busca(cursor)
             cursor.execute("INSERT INTO schema_migrations(version, name) VALUES(9, 'diagnostico_busca')")
 
+        # 10 and 11 are reserved for pending local migrations.
+        if 12 not in aplicadas:
+            from app.services.opportunity_tracking import migrate_opportunity_tracking
+            migrate_opportunity_tracking(cursor)
+            cursor.execute("INSERT INTO schema_migrations(version,name) VALUES(12,'acompanhamento_oportunidades')")
+
     @staticmethod
     def _migracao_diagnostico_busca(cursor):
         cursor.execute("ALTER TABLE job_searches ADD COLUMN diagnostics_json TEXT NOT NULL DEFAULT '{}'")
