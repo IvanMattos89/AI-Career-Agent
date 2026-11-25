@@ -35,3 +35,8 @@ temp_*
 backup/
 .vscode/
 .idea/
+
+# Registros pessoais e pesquisas de carreira não devem ser publicados.
+/private/
+/dados_pessoais/
+/docs/pesquisa_vagas_*.md

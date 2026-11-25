@@ -65,10 +65,10 @@ class JobPipelineTest(unittest.TestCase):
 
         result = service.buscar("Analista Fiscal", estado="SP")
 
-        self.assertEqual(len(result), 1)
+        self.assertEqual(len(result), 2)
         self.assertGreater(result[0]["rank_score"], 0)
         self.db.definir_decisao_vaga(result[0]["id"], "descartada")
-        self.assertEqual(service.buscar("Analista Fiscal", estado="SP"), [])
+        self.assertEqual(len(service.buscar("Analista Fiscal", estado="SP")), 1)
 
     def test_deduplicates_common_company_title_and_location_variations(self):
         first = JobListing(

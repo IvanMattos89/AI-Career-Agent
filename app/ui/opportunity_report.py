@@ -84,7 +84,7 @@ class OpportunityReport(QDialog):
                       row["salary"] or "Não informada", row["new_count"], row["duplicates"]]
             for j, value in enumerate(values):
                 cell = QTableWidgetItem(str(value))
-                cell.setToolTip(f"Anúncio: {row['url']}\nEmpresa: {row['company_evidence'].get('source', '')}\n"
+                cell.setToolTip(("Registro migrado: revisar identidade, decisões e confirmações antigas.\n" if row.get("identity_review") else "") + f"Anúncio: {row['url']}\nEmpresa: {row['company_evidence'].get('source', '')}\n"
                                 f"Disponibilidade: {row['availability_source'] or ''} — {row['checked_on'] or ''}")
                 self.table.setItem(i, j, cell)
 

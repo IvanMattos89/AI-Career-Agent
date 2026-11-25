@@ -366,7 +366,9 @@ class JobMatchPage(QWidget):
         self.vagas_encontradas = vagas
         self.resultados_busca.setRowCount(len(vagas))
         for linha, vaga in enumerate(vagas):
-            self.resultados_busca.setItem(linha, 0, QTableWidgetItem(vaga["titulo"]))
+            title = QTableWidgetItem(vaga["titulo"])
+            title.setToolTip(vaga.get("identity_note", ""))
+            self.resultados_busca.setItem(linha, 0, title)
             self.resultados_busca.setItem(linha, 1, QTableWidgetItem(vaga["empresa"]))
             self.resultados_busca.setItem(linha, 2, QTableWidgetItem(vaga["localizacao"]))
             self.resultados_busca.setItem(linha, 3, QTableWidgetItem(vaga["fonte"]))
@@ -408,6 +410,10 @@ class JobMatchPage(QWidget):
                     + (f"; filtros — {reasons}" if reasons else "")
                     + f"; {item['duplicadas']} duplicadas, {item['descartadas']} descartadas, {item['limite']} além do limite"
                 )
+                for page in item.get("paginas", []):
+                    parts.append(f"&nbsp; {escape(page['consulta'])} — página {page['pagina']}: "
+                                 f"{page['recebidas']} recebidas, {page['unicas']} novas identidades, "
+                                 f"{page['elegiveis_unicas']} únicas após filtros; {escape(page['erro'])}")
             queries = ", ".join(escape(q) for q in diagnostic["consultas"])
             omitted = ", ".join(escape(q) for q in diagnostic.get("consultas_omitidas", []))
             text = "<br>".join(parts) + f"<br><b>Consultas executadas:</b> {queries}"

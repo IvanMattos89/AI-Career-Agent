@@ -23,7 +23,6 @@ def normalize_url(value: str | None) -> str:
     query = urlencode([
         (key, item) for key, item in parse_qsl(parts.query, keep_blank_values=False)
         if not key.casefold().startswith("utm_")
-        and key.casefold() not in {"source", "ref", "referrer", "tracking"}
     ])
     return urlunsplit((parts.scheme.casefold(), parts.netloc.casefold(), path, query, ""))
 
@@ -66,6 +65,7 @@ class JobListing:
     location_state: str = ""
     location_city: str = ""
     remote_scope: str = ""
+    source_page: int = 1
     external_id: str = ""
     tags: list[str] = field(default_factory=list)
     modality: str = "Não informado"
@@ -79,15 +79,19 @@ class JobListing:
     id: int | None = None
 
     @property
+    def similarity_key(self) -> str:
+        """Only a review hint; never sufficient to merge requisitions."""
+        return "|".join((normalize_company(self.company), normalize_title(self.title), normalize_location(self.location)))
+
+    @property
     def canonical_key(self) -> str:
-        normalized_url = normalize_url(self.url)
-        signature = "|".join(
-            (normalize_company(self.company), normalize_title(self.title), normalize_location(self.location))
-        )
-        company_known = normalize_text(self.company) not in {"", "empresa nao informada"}
-        # A assinatura permite reconhecer a mesma publicação vinda de URLs e
-        # provedores diferentes. A URL fica como fallback quando faltam dados.
-        raw = signature if company_known and normalize_text(self.location) else normalized_url or signature
+        provider = normalize_text(self.provider)
+        if str(self.external_id or "").strip():
+            raw = "v2|id|" + provider + "|" + str(self.external_id).strip()
+        elif normalize_url(self.url):
+            raw = "v2|url|" + provider + "|" + normalize_url(self.url)
+        else:
+            raw = "v2|content|" + provider + "|" + self.similarity_key + "|" + normalize_text(self.description)
         return hashlib.sha256(raw.encode("utf-8", errors="ignore")).hexdigest()
 
     def as_dict(self) -> dict:

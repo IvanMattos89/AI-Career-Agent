@@ -176,7 +176,7 @@ class JobSearchService:
         names = ["Vagas.com", "Remotive", "Adzuna", "Jooble", "Greenhouse", "Lever", "Gupy", "Arbeitnow"] if self._default_catalog else []
         return {name: {"provider": name, "status": "aguardando" if name in active else "não configurada",
                        "consultas": 0, "falhas": 0, "recebidas": 0, "elegiveis": 0,
-                       "exibidas": 0, "duplicadas": 0, "descartadas": 0, "limite": 0,
+                       "exibidas": 0, "duplicadas": 0, "descartadas": 0, "limite": 0, "paginas": [], "falha_paginas": False,
                        "filtros": {"localização": 0, "modalidade": 0, "relevância": 0, "cargo excluído": 0, "remuneração": 0, "encerrada": 0}}
                 for name in dict.fromkeys([*names, *active])}
 
@@ -184,7 +184,9 @@ class JobSearchService:
     def _diagnostic_status(report):
         if report["status"] == "não configurada":
             return
-        if report["falhas"]:
+        if report.get("falha_paginas"):
+            report["status"] = "falha parcial de paginação"
+        elif report["falhas"]:
             report["status"] = "falhou" if report["falhas"] == report["consultas"] else "falha parcial"
         elif not report["recebidas"]:
             report["status"] = "sem resultados"
@@ -241,6 +243,10 @@ class JobSearchService:
                         duration_ms=round((time.perf_counter() - started[provider]) * 1000),
                         error="Falha na consulta; verifique conexão e configuração da fonte.")
                     continue
+                pages = getattr(provider, "page_diagnostics", [])
+                report["paginas"] = [dict(p, elegiveis_unicas=0, consulta=termo) for p in pages] if isinstance(pages, list) else []
+                report["falha_paginas"] = any(p["erro"] for p in report["paginas"])
+                seen_eligible = set()
                 eligible_brazil = 0
                 for listing in provider_results:
                     listing.provider = provider.name
@@ -262,6 +268,11 @@ class JobSearchService:
                     if not salary_assessment(listing.salary, salario_minimo, incluir_salario_desconhecido)["eligible"]:
                         report["filtros"]["remuneração"] += 1
                         continue
+                    if listing.canonical_key not in seen_eligible:
+                        for page_info in report["paginas"]:
+                            if page_info["pagina"] == listing.source_page:
+                                page_info["elegiveis_unicas"] += 1
+                        seen_eligible.add(listing.canonical_key)
                     report["elegiveis"] += 1
                     listing.rank_score, listing.rank_explanation = self._ranking(listing, terms, estado, cidade, modalidade, senioridade)
                     candidates.append(listing)
@@ -276,6 +287,8 @@ class JobSearchService:
         output: list[dict] = []
         for position, listing in enumerate(results, start=1):
             item = listing.as_dict()
+            item["possible_duplicates"] = sum(other.similarity_key == listing.similarity_key and other.canonical_key != listing.canonical_key for other in results)
+            item["identity_note"] = "Possível duplicidade; requisições preservadas para revisão" if item["possible_duplicates"] else ""
             known = self.db.conn.execute("SELECT id FROM job_listings WHERE canonical_key=?", (listing.canonical_key,)).fetchone()
             listing_id, decision = self.db.salvar_vaga_encontrada(item, search_id, position)
             tracker.observe(listing_id, search_id, bool(known), sum(v.canonical_key == listing.canonical_key for v in candidates))
@@ -423,6 +436,8 @@ class JobSearchService:
             for query_report in reports:
                 for source in query_report["fontes"]:
                     target = combined[source["provider"]]
+                    target["paginas"].extend(source.get("paginas", []))
+                    target["falha_paginas"] = target["falha_paginas"] or source.get("falha_paginas", False)
                     for key in ("consultas", "falhas", "recebidas", "elegiveis", "duplicadas", "descartadas", "limite"):
                         target[key] += source[key]
                     for key, count in source["filtros"].items():

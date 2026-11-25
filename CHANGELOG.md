@@ -70,3 +70,11 @@
 - Prioridade para multinacionais sustentada por registro de fonte/data, sem alterar aderência técnica.
 - Relatório filtrável e CSV de novas descobertas, repetições, encerramentos confirmados e disponibilidade pendente.
 - Resumo de oportunidades, candidaturas e entrevistas em curso por currículo no dashboard; migração 12 preserva dados anteriores.
+
+
+## Privacidade, identidade de requisição e paginação — 2026-11-25
+
+- Documentação pessoal substituída por exemplos fictícios; originais preservados fora do repositório. Histórico Git ainda requer tratamento separado.
+- Identidade por fonte/ID ou URL, preservando requisições diferentes; migração 13 sem exclusão de linhas ou vínculos.
+- Teto salarial mantém mínimo desconhecido e remuneração a confirmar.
+- Paginação limitada de Gupy, Adzuna e Jooble com contribuição por página, interrupção de repetição e retenção de resultados parciais.

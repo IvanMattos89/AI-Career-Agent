@@ -20,6 +20,45 @@ class JobProvider(ABC):
         """Consulta somente endpoints ou páginas públicas."""
 
 
+class PagedProvider(JobProvider):
+    page_size = 50
+
+    @abstractmethod
+    def _search_page(self, query: str, page: int) -> list[JobListing]:
+        pass
+
+    def search(self, query: str) -> list[JobListing]:
+        try:
+            limit = max(1, min(5, int(os.getenv("JOB_SEARCH_MAX_PAGES", "2"))))
+        except ValueError:
+            limit = 2
+        self.page_diagnostics: list[dict] = []
+        results: list[JobListing] = []
+        seen: set[str] = set()
+        for page in range(1, limit + 1):
+            self.raw_count = 0
+            self.total_pages: int | None = None
+            try:
+                items = self._search_page(query, page)
+            except (requests.RequestException, ValueError, TypeError, KeyError):
+                self.page_diagnostics.append({"pagina": page, "recebidas": 0, "unicas": 0, "erro": "Falha na página; coleta parcial"})
+                if page == 1:
+                    raise ProviderRequestError(f"Falha ao consultar {self.name}.") from None
+                break
+            keys = {item.canonical_key for item in items}
+            new = keys - seen
+            for item in items:
+                item.source_page = page
+            results.extend(items)
+            self.page_diagnostics.append({"pagina": page, "recebidas": self.raw_count, "unicas": len(new), "erro": ""})
+            seen.update(keys)
+            if (not self.raw_count or (items and not new)
+                    or (self.total_pages is not None and page >= self.total_pages)
+                    or (self.total_pages is None and self.raw_count < self.page_size)):
+                break
+        return results
+
+
 class ProviderRequestError(ValueError):
     """Erro sanitizado que nunca inclui tokens ou chaves na mensagem."""
 
@@ -220,9 +259,10 @@ class LeverProvider(JobProvider):
         return results
 
 
-class GupyProvider(JobProvider):
+class GupyProvider(PagedProvider):
     """API oficial autenticada da organização, limitada a vagas externas publicadas."""
 
+    page_size = 100
     name = "Gupy"
     url = "https://api.gupy.io/api/v1/jobs"
 
@@ -235,7 +275,7 @@ class GupyProvider(JobProvider):
             return payload
         return payload.get("data") or payload.get("results") or payload.get("items") or []
 
-    def search(self, query: str) -> list[JobListing]:
+    def _search_page(self, query: str, page: int) -> list[JobListing]:
         if not self.token:
             return []
         response = safe_request(
@@ -243,15 +283,19 @@ class GupyProvider(JobProvider):
                 self.url,
                 params={
                     "name": query, "status": "published", "publicationType": "external",
-                    "fields": "all", "perPage": 100, "page": 1,
+                    "fields": "all", "perPage": 100, "page": page,
                 },
                 headers={"Authorization": f"Bearer {self.token}", "Accept": "application/json"},
                 timeout=20,
             ),
             self.name,
         )
+        payload = response.json()
+        raw = self._items(payload)
+        self.raw_count = len(raw)
+        self.total_pages = payload.get("totalPages") if isinstance(payload, dict) and isinstance(payload.get("totalPages"), int) else None
         results = []
-        for item in self._items(response.json()):
+        for item in raw:
             title = item.get("name") or item.get("roleName") or "Vaga sem título"
             description = JobMatchService.limpar_descricao(
                 item.get("description") or item.get("jobDescription") or ""
@@ -282,22 +326,22 @@ class GupyProvider(JobProvider):
         return results
 
 
-class AdzunaProvider(JobProvider):
+class AdzunaProvider(PagedProvider):
     """API estruturada do Adzuna para o catálogo brasileiro."""
 
     name = "Adzuna"
-    url = "https://api.adzuna.com/v1/api/jobs/br/search/1"
+    url = "https://api.adzuna.com/v1/api/jobs/br/search/{page}"
 
     def __init__(self, app_id: str | None = None, app_key: str | None = None):
         self.app_id = (app_id if app_id is not None else os.getenv("ADZUNA_APP_ID", "")).strip()
         self.app_key = (app_key if app_key is not None else os.getenv("ADZUNA_APP_KEY", "")).strip()
 
-    def search(self, query: str) -> list[JobListing]:
+    def _search_page(self, query: str, page: int) -> list[JobListing]:
         if not self.app_id or not self.app_key:
             return []
         response = safe_request(
             lambda: requests.get(
-                self.url,
+                self.url.format(page=page),
                 params={
                     "app_id": self.app_id, "app_key": self.app_key, "what": query,
                     "where": "Brasil", "results_per_page": 50,
@@ -308,8 +352,13 @@ class AdzunaProvider(JobProvider):
             ),
             self.name,
         )
+        payload = response.json()
+        raw = payload.get("results", [])
+        self.raw_count = len(raw)
+        total = payload.get("count")
+        self.total_pages = (int(total) + self.page_size - 1) // self.page_size if isinstance(total, (int, float)) else None
         results = []
-        for item in response.json().get("results", []):
+        for item in raw:
             salary = ""
             if item.get("salary_min") or item.get("salary_max"):
                 salary = f"{item.get('salary_min') or '?'} – {item.get('salary_max') or '?'}"
@@ -329,27 +378,32 @@ class AdzunaProvider(JobProvider):
         return results
 
 
-class JoobleProvider(JobProvider):
+class JoobleProvider(PagedProvider):
     """Agregador oficial Jooble, habilitado somente com chave de API."""
 
     name = "Jooble"
-    url = "https://jooble.org/api/{key}"
+    url = "https://br.jooble.org/api/{key}"
 
     def __init__(self, api_key: str | None = None):
         self.api_key = (api_key if api_key is not None else os.getenv("JOOBLE_API_KEY", "")).strip()
 
-    def search(self, query: str) -> list[JobListing]:
+    def _search_page(self, query: str, page: int) -> list[JobListing]:
         if not self.api_key:
             return []
         response = safe_request(
             lambda: requests.post(
                 self.url.format(key=self.api_key),
-                json={"keywords": query, "location": "Brasil", "page": 1, "ResultOnPage": 50},
+                json={"keywords": query, "location": "Brasil", "page": page, "ResultOnPage": 50},
                 headers={"Content-Type": "application/json"},
                 timeout=20,
             ),
             self.name,
         )
+        payload = response.json()
+        raw = payload.get("jobs", [])
+        self.raw_count = len(raw)
+        total = payload.get("totalCount")
+        self.total_pages = (int(total) + self.page_size - 1) // self.page_size if isinstance(total, (int, float)) else None
         return [
             JobListing(
                 title=item.get("title") or "Vaga sem título",
@@ -363,7 +417,7 @@ class JoobleProvider(JobProvider):
                 salary=item.get("salary") or "",
                 published_at=item.get("updated") or "",
             )
-            for item in response.json().get("jobs", [])
+            for item in raw
         ]
 
 

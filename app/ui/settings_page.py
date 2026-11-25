@@ -175,6 +175,11 @@ class SettingsPage(QWidget):
         value = os.getenv("JOB_SEARCH_MAX_QUERIES", "20")
         self.max_search_queries.setCurrentText(value if value.isdigit() and 1 <= int(value) <= 50 else "20")
         profile_form.addRow("Máximo de consultas por busca", self.max_search_queries)
+        self.max_search_pages = QComboBox()
+        self.max_search_pages.addItems(["1", "2", "3", "4", "5"])
+        pages = os.getenv("JOB_SEARCH_MAX_PAGES", "2")
+        self.max_search_pages.setCurrentText(pages if pages in {"1", "2", "3", "4", "5"} else "2")
+        profile_form.addRow("Páginas por consulta (Gupy, Adzuna, Jooble)", self.max_search_pages)
         profile_form.addRow("", self._helper(
             "Separe os títulos por vírgula. São consultados primeiro, seguidos dos cargos sugeridos, até o limite escolhido. O diagnóstico lista os títulos não executados."
         ))
@@ -378,6 +383,7 @@ class SettingsPage(QWidget):
             "JOB_ENABLE_ARBEITNOW": "true" if self.enable_arbeitnow.isChecked() else "false",
             "JOB_TARGET_TITLES": self.target_titles.text().strip(),
             "JOB_SEARCH_MAX_QUERIES": self.max_search_queries.currentText(),
+            "JOB_SEARCH_MAX_PAGES": self.max_search_pages.currentText(),
             "GUPY_API_TOKEN": self.gupy_token.text().strip(),
             "ADZUNA_APP_ID": self.adzuna_id.text().strip(),
             "ADZUNA_APP_KEY": self.adzuna_key.text().strip(),
