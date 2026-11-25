@@ -1,5 +1,7 @@
 from datetime import date
 
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -54,6 +56,16 @@ class OpportunityReport(QDialog):
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         layout.addWidget(self.table)
+        link_bar = QHBoxLayout()
+        link_bar.addWidget(QLabel("Link da vaga"))
+        self.link = QLineEdit()
+        self.link.setReadOnly(True)
+        link_bar.addWidget(self.link, 1)
+        self.open_button = QPushButton("Abrir anúncio")
+        self.open_button.clicked.connect(self.open_listing)
+        link_bar.addWidget(self.open_button)
+        layout.addLayout(link_bar)
+        self.table.currentCellChanged.connect(self.update_link)
         actions = QHBoxLayout()
         for label, callback in [("Registrar evidência da empresa", self.company), ("Confirmar disponibilidade", self.availability),
                                 ("Exportar relatório CSV", self.export), ("Atualizar", self.reload)]:
@@ -78,6 +90,7 @@ class OpportunityReport(QDialog):
         self.rows = [r for r in rows if index == 0 or (index == 1 and r["new_count"]) or
                      (index == 2 and r["duplicates"]) or (index == 3 and r["availability"] == "encerrada") or
                      (index == 4 and r["availability"] == "pendente")]
+        self.table.setCurrentCell(-1, -1)
         self.table.setRowCount(len(self.rows))
         for i, row in enumerate(self.rows):
             values = [row["title"], row["company"], row["company_evidence"]["label"], row["availability"],
@@ -87,6 +100,22 @@ class OpportunityReport(QDialog):
                 cell.setToolTip(f"Anúncio: {row['url']}\nEmpresa: {row['company_evidence'].get('source', '')}\n"
                                 f"Disponibilidade: {row['availability_source'] or ''} — {row['checked_on'] or ''}")
                 self.table.setItem(i, j, cell)
+
+        self.update_link()
+
+    def update_link(self):
+        index = self.table.currentRow()
+        selected = 0 <= index < len(self.rows)
+        url = (self.rows[index]["url"] or "").strip() if selected else ""
+        self.link.setText(url)
+        self.link.setCursorPosition(0)
+        self.link.setPlaceholderText("Link não informado" if selected else "Selecione uma vaga")
+        target = QUrl(url)
+        self.open_button.setEnabled(bool(target.isValid() and target.host() and target.scheme() in {"http", "https"}))
+
+    def open_listing(self):
+        if self.open_button.isEnabled() and not QDesktopServices.openUrl(QUrl(self.link.text())):
+            QMessageBox.warning(self, "Abrir anúncio", "Não foi possível abrir o navegador. Copie o link da vaga.")
 
     def selected(self):
         index = self.table.currentRow()

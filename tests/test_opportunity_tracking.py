@@ -134,3 +134,30 @@ def test_report_ui_filters_and_export_prevent_csv_formulas(db, tmp_path):
     assert rows[0]["availability"] == "pendente"
     dialog.close()
     assert app is not None
+
+
+def test_report_opens_selected_listing_link(db, monkeypatch):
+    from PySide6.QtGui import QDesktopServices
+    from PySide6.QtWidgets import QApplication
+
+    from app.ui.opportunity_report import OpportunityReport
+
+    app = QApplication.instance() or QApplication([])
+    listing = job("Com anúncio")
+    listing.url = "https://example.org/vagas/123"
+    service(db, [listing, job("Sem anúncio")]).buscar("Analista Fiscal")
+    dialog = OpportunityReport(db)
+    opener = Mock(return_value=True)
+    monkeypatch.setattr(QDesktopServices, "openUrl", opener)
+    for index, row in enumerate(dialog.rows):
+        dialog.table.setCurrentCell(index, 0)
+        assert dialog.link.text() == row["url"]
+        assert dialog.open_button.isEnabled() == bool(row["url"])
+        dialog.open_button.click()
+    assert opener.call_count == 1
+    assert opener.call_args.args[0].toString() == listing.url
+    dialog.kind.setCurrentIndex(3)
+    assert not dialog.link.text()
+    assert not dialog.open_button.isEnabled()
+    dialog.close()
+    assert app is not None
