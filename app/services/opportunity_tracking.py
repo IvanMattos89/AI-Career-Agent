@@ -39,12 +39,15 @@ def salary_assessment(text, minimum=0, include_unknown=True):
     amounts = [float(v.replace(".", "").replace(",", ".")) for v in values]
     if "mil" in normalized or "k" in normalized or min(amounts) <= 0:
         return {"eligible": include_unknown, "status": "A confirmar: formato de remuneração", "min": None, "max": None}
-    low = min(amounts)
+    low: float | None = min(amounts)
     high: float | None = max(amounts)
     if re.search(r"a partir|desde|acima de", normalized) and len(amounts) == 1:
         high = None
-    status = "Faixa mensal BRL divulgada"
-    if minimum and low < minimum and (high is None or high >= minimum):
+    ceiling_only = len(amounts) == 1 and bool(re.search(r"\bate\b|teto|maximo|up to", normalized))
+    if ceiling_only:
+        low = None
+    status = "A confirmar: teto divulgado, mínimo desconhecido" if ceiling_only else "Faixa mensal BRL divulgada"
+    if minimum and low is not None and low < minimum and (high is None or high >= minimum):
         status = "A confirmar: negociação dentro da faixa"
     return {"eligible": high is None or high >= minimum, "status": status, "min": low, "max": high}
 

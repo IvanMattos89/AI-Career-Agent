@@ -2,16 +2,9 @@
 
 Aplicação desktop para analisar currículos, encontrar vagas brasileiras, comparar aderência e organizar candidaturas com privacidade local.
 
-## Direcionamento de carreira
+## Documentação e privacidade
 
-As [orientações do agente neste repositório](AGENTS.md) foram atualizadas em 27/09/2026.
-O [documento de referência](docs/AI_Career_Agent_atualizado.md) reúne o objetivo de
-Analista Fiscal/Tributário Sênior, a evolução para Especialista, o plano de 90 dias,
-o histórico de oportunidades e as pendências de validação. Os registros de vagas
-e remuneração são históricos, sem confirmação externa de disponibilidade atual.
-A [matriz de competências](docs/matriz_competencias.md) orienta a validação do perfil com evidências. As análises terminam em priorizar, investigar ou descartar; o plano combina frentes paralelas e revisões semanais e mensais.
-Essa aplicação documental não altera os prompts ou o banco do aplicativo desktop.
-As rotinas diárias e semanais estão documentadas; ativação e horários não foram verificados.
+Os documentos em `docs/AI_Career_Agent_atualizado.md` e `docs/matriz_competencias.md` são exemplos inteiramente fictícios. Histórico pessoal deve ficar fora do Git. A anonimização da árvore atual não remove cópias em commits anteriores, forks ou clones.
 
 ## Recursos
 
@@ -170,12 +163,12 @@ Os cargos configurados são consultados primeiro, inclusive equivalentes fora da
 
 O diagnóstico no Job Match diferencia fonte não configurada, falha, falha parcial, resposta vazia, eliminação por filtros e resultados disponíveis. Mostra motivos de filtro, duplicações, decisões de descarte e limite de resultados. Contagens recebidas somam consultas e podem repetir anúncios; a quantidade exibida é única após consolidação. Erros persistidos não contêm URLs ou credenciais. Dados anteriores à migração 9 continuam disponíveis no formato de métricas anterior.
 
-Esta etapa não adiciona novas fontes nem paginação: Adzuna, Jooble e Gupy continuam limitados à página inicial; o limite padrão da lista continua 25. LinkedIn e Indeed continuam como pesquisas no navegador. Testes dos provedores usam respostas simuladas e não comprovam disponibilidade ao vivo ou credenciais da instalação.
+A busca usa fontes configuradas e paginação limitada em Adzuna, Jooble e Gupy; consulte as regras abaixo. LinkedIn e Indeed continuam como pesquisas no navegador. Testes dos provedores usam respostas simuladas e não comprovam disponibilidade ao vivo ou credenciais da instalação.
 
 
 ### Busca fiscal e acompanhamento de oportunidades (24/11/2026)
 
-Em **Buscar vagas**, ative o foco Fiscal Sênior / Especialista Tributário para consultar também equivalentes em português e inglês. O foco é opcional e não modifica o perfil de outros usuários. A busca para currículo mantém o limite de consultas configurado e informa omissões; o máximo de resultados da tela pode variar de 1 a 200. A ampliação é de consultas e resultados nas fontes já configuradas, sem novos catálogos ou paginação adicional.
+Em **Buscar vagas**, ative o foco Fiscal Sênior / Especialista Tributário para consultar também equivalentes em português e inglês. O foco é opcional e não modifica o perfil de outros usuários. A busca para currículo mantém o limite de consultas configurado e informa omissões; o máximo de resultados da tela pode variar de 1 a 200. A ampliação é de consultas e resultados nas fontes já configuradas, sem novos catálogos; a paginação é limitada e configurável.
 
 O mínimo financeiro compara somente remuneração mensal explicitamente divulgada em BRL. Ausência de moeda/período, valores anuais, outras moedas e componentes variáveis ficam a confirmar; a opção de incluir remuneração desconhecida vem marcada. Faixas que cruzam o mínimo continuam como negociação a confirmar. Não há conversão de regime CLT/PJ nem estimativa de salário não divulgado.
 
@@ -186,3 +179,19 @@ O relatório apresenta novas descobertas e repetições por período, encerradas
 O catálogo é compartilhado. No dashboard e no relatório, o resumo adicional de oportunidades, candidaturas e entrevistas em curso usa o currículo ativo; entrevista simulada não conta como processo seletivo. Os cards anteriores mantêm suas métricas globais. O CSV exporta a seleção atual com fonte/data de disponibilidade e classificação da empresa. A migração 12 adiciona as tabelas sem apagar dados (10 e 11 são reservadas ao trabalho local existente).
 
 A aderência continua usando a camada comum de evidências do currículo e a decisão priorizar/investigar/descartar do Job Match. Filtros de busca e prioridade empresarial não constituem comprovação de competência. Nenhuma candidatura ou mensagem é enviada por estes controles.
+
+
+### Identidade, teto salarial e alcance por página — 25/11/2026
+
+- A identidade usa fonte + ID da requisição; sem ID, usa fonte + URL normalizada. Sem ambos, usa conteúdo e atributos, com limitações de identidade. Cargo/empresa/cidade são apenas indício de possível duplicidade: requisições distintas e resultados de fontes diferentes permanecem separados. O título na tabela informa a necessidade de revisão quando houver coincidência.
+- A migração 13 recalcula chaves sem remover linhas nem vínculos. Registros legados recebem aviso para revisão de identidade, decisões e confirmações. Anúncios já sobrescritos pela regra anterior não podem ser reconstruídos a partir do banco sobrevivente; novas buscas podem recuperá-los. Uma decisão antiga deve ser revista se não corresponder à requisição preservada.
+- “Até” ou “teto de” um único valor mensal em BRL produz máximo divulgado e mínimo desconhecido. Se o teto comportar o mínimo desejado, a vaga permanece com remuneração a confirmar, sem afirmar que o piso foi atendido.
+- Em Configurações → Busca de vagas, selecione de 1 a 5 páginas por consulta (padrão 2) para Gupy, Adzuna e Jooble. A coleta para em página vazia, fim informado, página repetida ou limite. Falha em página posterior preserva os resultados anteriores e aparece como coleta parcial, sem incluir credenciais em erros.
+- O diagnóstico apresenta recebidas, identidades novas e únicas após os filtros por página/consulta. São elegíveis para a busca, não comprovação de aderência técnica. Aumentar o limite não garante encontrar 50 oportunidades adequadas.
+- A Gupy continua vinculada à organização do token. Jooble usa o domínio brasileiro e exige chave correspondente ao país. Confira quotas antes de aumentar consultas × páginas; nenhum teste desta atualização valida disponibilidade ou credenciais ao vivo.
+
+Referências técnicas: [paginação Gupy](https://developers.gupy.io/reference/pagination), [pesquisa Adzuna](https://developer.adzuna.com/docs/search), [API Jooble](https://help.jooble.org/en/support/solutions/articles/60001448238-rest-api-documentation).
+
+### Limite da remoção de dados pessoais
+
+Os arquivos públicos de planejamento foram substituídos por modelos fictícios e os originais foram preservados em armazenamento privado fora do Git. Essa alteração limpa a árvore atual, não o histórico. A auditoria identificou versões antigas dos documentos em commits anteriores. Remover essas versões exige uma operação coordenada de reescrita de referências, além de avaliar PRs, forks, clones e caches externos. Não há garantia de revogação de cópias já baixadas.

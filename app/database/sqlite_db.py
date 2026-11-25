@@ -337,6 +337,11 @@ class Database:
             migrate_opportunity_tracking(cursor)
             cursor.execute("INSERT INTO schema_migrations(version,name) VALUES(12,'acompanhamento_oportunidades')")
 
+        if 13 not in aplicadas:
+            from app.database.requisition_identity import migrate_requisition_identity
+            migrate_requisition_identity(cursor)
+            cursor.execute("INSERT INTO schema_migrations(version,name) VALUES(13,'identidade_requisicao')")
+
     @staticmethod
     def _migracao_diagnostico_busca(cursor):
         cursor.execute("ALTER TABLE job_searches ADD COLUMN diagnostics_json TEXT NOT NULL DEFAULT '{}'")
